@@ -8,7 +8,8 @@ func defaultAgent(name string) *domain.AgentConfig {
 		Agent: domain.Agent{
 			Name:         name,
 			Description:  "Agent " + name,
-			Model:        "openai/gpt-4o",
+			Provider:     "openai",
+			Model:        "gpt-4o",
 			Temperature:  0.2,
 			SystemPrompt: "You are a helpful assistant. You answer clearly and to the point.\n",
 			Memory: &domain.Memory{

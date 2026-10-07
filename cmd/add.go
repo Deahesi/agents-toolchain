@@ -5,7 +5,6 @@ import (
 
 	"github.com/Deahesi/agents-toolchain/internal/config"
 	"github.com/Deahesi/agents-toolchain/internal/ui"
-	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -20,12 +19,12 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
-		uiService := ui.NewUIService()
+		uiService := ui.NewUIService(ui.WithInput(cmd.InOrStdin()), ui.WithOutput(cmd.OutOrStdout()), ui.WithErrorOutput(cmd.ErrOrStderr()), ui.WithContext(cmd.Context()))
 		configService := config.NewConfigService(uiService, workspaceDir)
 
-		path, err := configService.CreateAgent(cmd.Context(), args[0])
+		path, err := configService.CreateAgent(uiService.Context(), args[0])
 		if err != nil {
-			pterm.Error.WithWriter(cmd.ErrOrStderr()).Println(err)
+			uiService.LogError(err)
 			return err
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "Created", path)

@@ -31,12 +31,23 @@ func localPath(message string) validation.Rule {
 	})
 }
 
+func validateProvider(value any) error {
+	provider := value.(string)
+	for _, supported := range Providers {
+		if provider == string(supported) {
+			return nil
+		}
+	}
+	return fmt.Errorf("unsupported agent.provider %q", provider)
+}
+
 func validateModel(value any) error {
-	name := value.(string)
-	provider, model, ok := strings.Cut(name, "/")
-	if !ok || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" ||
-		strings.ContainsAny(name, " \t\r\n") {
-		return errors.New("agent.model must have the form provider/model")
+	model := value.(string)
+	if strings.TrimSpace(model) == "" {
+		return errors.New("agent.model is required")
+	}
+	if strings.ContainsAny(model, " \t\r\n") {
+		return errors.New("agent.model must not contain whitespace")
 	}
 	return nil
 }

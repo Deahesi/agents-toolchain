@@ -37,6 +37,7 @@ func (c *AgentConfig) Validate() error {
 type Agent struct {
 	Name         string  `yaml:"name"`
 	Description  string  `yaml:"description"`
+	Provider     string  `yaml:"provider"`
 	Model        string  `yaml:"model"`
 	Temperature  float64 `yaml:"temperature"`
 	SystemPrompt string  `yaml:"system_prompt"`
@@ -44,18 +45,35 @@ type Agent struct {
 	Tools        []Tool  `yaml:"tools"`
 }
 
+func ValidateProvider(p any) error {
+	return validation.Validate(p, requiredText("Provider is required"), validation.By(validateProvider))
+}
+
+func ValidateModel(m any) error {
+	return validation.Validate(m, validation.By(validateModel))
+}
+
+func ValidateTemperature(t any) error {
+	return validation.Validate(t,
+		validation.By(validateFiniteNumber),
+		validation.Min(0.0).Error(temperatureError),
+		validation.Max(2.0).Error(temperatureError),
+	)
+}
+
+func ValidateSystemPrompt(p any) error {
+	return validation.Validate(p, requiredText("System prompt is required"))
+}
+
 func (a *Agent) Validate() error {
 	return validation.ValidateStruct(a,
 		validation.Field(&a.Name, validation.By(func(value any) error {
 			return ValidateAgentName(value.(string))
 		})),
-		validation.Field(&a.Model, validation.By(validateModel)),
-		validation.Field(&a.Temperature,
-			validation.By(validateFiniteNumber),
-			validation.Min(0.0).Error(temperatureError),
-			validation.Max(2.0).Error(temperatureError),
-		),
-		validation.Field(&a.SystemPrompt, requiredText("agent.system_prompt is required")),
+		validation.Field(&a.Provider, validation.By(ValidateProvider)),
+		validation.Field(&a.Model, validation.By(ValidateModel)),
+		validation.Field(&a.Temperature, validation.By(ValidateTemperature)),
+		validation.Field(&a.SystemPrompt, validation.By(ValidateSystemPrompt)),
 		validation.Field(&a.Memory),
 		validation.Field(&a.Tools, validation.By(validateUniqueToolNames)),
 	)

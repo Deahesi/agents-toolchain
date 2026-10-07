@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/Deahesi/agents-toolchain/internal/config"
 	"github.com/Deahesi/agents-toolchain/internal/ui"
-	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -22,20 +23,19 @@ var initCmd = &cobra.Command{
 		}
 
 		output := cmd.OutOrStdout()
-		pterm.DefaultSection.WithWriter(output).Println("Project initialization")
-		pterm.DefaultBasicText.WithWriter(output).Printfln("Workspace: %s\nAgents:    %s\n", workspaceDir, agentsDir)
-
-		uiService := ui.NewUIService()
+		uiService := ui.NewUIService(ui.WithInput(cmd.InOrStdin()), ui.WithOutput(output), ui.WithErrorOutput(cmd.ErrOrStderr()), ui.WithContext(cmd.Context()))
+		uiService.LogStep("Project initialization")
+		uiService.LogStep(fmt.Sprintf("Workspace: %s\nAgents:    %s\n", workspaceDir, agentsDir))
 		configService := config.NewConfigService(uiService, workspaceDir)
 
-		path, err := configService.Init(cmd.Context(), agentsDir)
+		path, err := configService.Init(uiService.Context(), agentsDir)
 		if err != nil {
-			pterm.Error.WithWriter(cmd.ErrOrStderr()).Println(err)
+			uiService.LogError(err)
 			cmd.SilenceErrors = true
 			return err
 		}
 
-		pterm.Success.WithWriter(output).Printfln("Project initialized: %s", path)
+		uiService.LogSuccess("Project initialized: ", path)
 		return nil
 	},
 }
