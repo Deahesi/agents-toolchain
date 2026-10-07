@@ -1,40 +1,37 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-
-*/
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/Deahesi/agents-toolchain/internal/agent"
+	"github.com/Deahesi/agents-toolchain/internal/config"
+	"github.com/Deahesi/agents-toolchain/internal/ui"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
-// runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:   "run",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Use:   "run <agent-name>",
+	Short: "Run an agent through Genkit and stream its response",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		workspaceDir, err := cmd.Flags().GetString("workspace-dir")
+		if err != nil {
+			return err
+		}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("run called")
+		uiService := ui.NewUIService()
+		configService := config.NewConfigService(uiService, workspaceDir)
+		agentService := agent.NewAgentService(configService)
+
+		prompt, err := cmd.Flags().GetString("prompt")
+		if err != nil {
+			pterm.Error.WithWriter(cmd.ErrOrStderr()).Println(err)
+			return err
+		}
+		return agentService.Run(cmd.Context(), args[0], prompt, cmd.OutOrStdout())
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	runCmd.Flags().StringP("prompt", "p", "", "User prompt; defaults to the task in system_prompt")
 }

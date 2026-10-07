@@ -1,0 +1,13 @@
+version: "1.0"
+agent:
+  name: anekdoti
+  description: anekdoti
+  model: openrouter/apodex/apodex-1.1-mini:free
+  temperature: 0.2
+  system_prompt: |
+    Ты эксперт по анекдотам
+    Напиши рандомный анекдот
+  memory:
+    type: local_file
+    path: ./.agent_history.json
+  tools: []

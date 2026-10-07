@@ -1,0 +1,10 @@
+/bin/
+/.tmp/
+/agent-toolchain
+/agent-toolchain.exe
+/coverage.out
+.agent_history.json
+.agent-history-*
+.env
+.env.*
+!.env.example
