@@ -61,7 +61,7 @@ func validateFiniteNumber(value any) error {
 }
 
 func validateUniqueToolNames(value any) error {
-	tools := value.([]Tool)
+	tools := value.([]ToolConfig)
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
 		if names[tool.Name] {

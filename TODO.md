@@ -1,1 +1,1 @@
-1. Валидация при запуске (Config by run)
+Validation config on model run (Config by run)

@@ -1,4 +1,4 @@
-package agent
+package agents
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 )
 
 // TODO: при пополнении провайдеров разместить их по модулями
-func initialize(ctx context.Context, provider string) (*genkit.Genkit, error) {
+func GetProviderPlugin(ctx context.Context, provider string) (genkit.GenkitOption, error) {
 	var plugin api.Plugin
 
 	switch domain.ProviderKey(provider) {
@@ -64,5 +64,5 @@ func initialize(ctx context.Context, provider string) (*genkit.Genkit, error) {
 		return nil, fmt.Errorf("unsupported model provider %q", provider)
 	}
 
-	return genkit.Init(ctx, genkit.WithPlugins(plugin)), nil
+	return genkit.WithPlugins(plugin), nil
 }

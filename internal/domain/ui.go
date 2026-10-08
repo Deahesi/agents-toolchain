@@ -24,5 +24,9 @@ type Spinner interface {
 
 type Area interface {
 	Stop() error
-	Update(message ...any)
+	// ChangeColor sets the default color for future fragments; empty resets it.
+	ChangeColor(color string) error
+	// Update appends text. An optional ANSI index or HEX color applies only to
+	// this fragment; an explicit empty color uses the terminal's default color.
+	Update(text string, color ...string)
 }

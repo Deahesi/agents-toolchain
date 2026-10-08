@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/Deahesi/agents-toolchain/internal/agent"
 	"github.com/Deahesi/agents-toolchain/internal/config"
+	"github.com/Deahesi/agents-toolchain/internal/runtime"
 	"github.com/Deahesi/agents-toolchain/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ var runCmd = &cobra.Command{
 
 		uiService := ui.NewUIService(ui.WithInput(cmd.InOrStdin()), ui.WithOutput(cmd.OutOrStdout()), ui.WithErrorOutput(cmd.ErrOrStderr()), ui.WithContext(cmd.Context()))
 		configService := config.NewConfigService(uiService, workspaceDir)
-		agentService := agent.NewAgentService(uiService, configService)
+		agentService := runtime.NewRuntimeService(uiService, configService)
 
 		prompt, err := cmd.Flags().GetString("prompt")
 		if err != nil {

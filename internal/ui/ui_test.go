@@ -137,23 +137,29 @@ func TestInputComponentsSubmitAndCancel(t *testing.T) {
 	}
 }
 
-func TestRedirectedAreaWritesLatestContentOnce(t *testing.T) {
+func TestRedirectedAreaWritesFragmentsOnce(t *testing.T) {
 	var output bytes.Buffer
 	s := NewUIService(WithInput(nil), WithOutput(&output))
 	area, err := s.Area("Output")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := area.ChangeColor("#FF0000"); err != nil {
+		t.Fatal(err)
+	}
 	area.Update("partial")
-	area.Update("\nFull response\n\nSecond paragraph\r\n")
+	area.Update("\nFull response\n\nSecond paragraph\r\n", "#FFFFFF")
 	if err := area.Stop(); err != nil {
 		t.Fatal(err)
 	}
 	area.Update("late update")
+	if err := area.ChangeColor("2"); err != nil {
+		t.Fatal(err)
+	}
 	if err := area.Stop(); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := output.String(), "\nFull response\n\nSecond paragraph\r\n"; got != want {
+	if got, want := output.String(), "partial\nFull response\n\nSecond paragraph\r\n"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	if _, err := s.TextInput("Input"); !errors.Is(err, ErrNotInteractive) {
@@ -201,6 +207,9 @@ func TestConcurrentAreaUpdatesAndLogging(t *testing.T) {
 		group.Go(func() {
 			for range 10 {
 				area.Update("Updated response")
+				if err := area.ChangeColor("2"); err != nil {
+					t.Error(err)
+				}
 				s.LogStep("Progress")
 			}
 		})

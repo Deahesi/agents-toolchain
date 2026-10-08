@@ -35,14 +35,14 @@ func (c *AgentConfig) Validate() error {
 }
 
 type Agent struct {
-	Name         string  `yaml:"name"`
-	Description  string  `yaml:"description"`
-	Provider     string  `yaml:"provider"`
-	Model        string  `yaml:"model"`
-	Temperature  float64 `yaml:"temperature"`
-	SystemPrompt string  `yaml:"system_prompt"`
-	Memory       *Memory `yaml:"memory,omitempty"`
-	Tools        []Tool  `yaml:"tools"`
+	Name         string       `yaml:"name"`
+	Description  string       `yaml:"description"`
+	Provider     string       `yaml:"provider"`
+	Model        string       `yaml:"model"`
+	Temperature  float64      `yaml:"temperature"`
+	SystemPrompt string       `yaml:"system_prompt"`
+	Memory       *Memory      `yaml:"memory,omitempty"`
+	Tools        []ToolConfig `yaml:"tools"`
 }
 
 func ValidateProvider(p any) error {
@@ -92,14 +92,24 @@ func (m *Memory) Validate() error {
 	)
 }
 
-type Tool struct {
-	Name                string `yaml:"name"`
-	Type                string `yaml:"type"`
-	Description         string `yaml:"description"`
-	AllowWithoutConfirm bool   `yaml:"allow_without_confirm"`
+type ToolType string
+
+const (
+	ToolTypeBuiltin ToolType = "builtin"
+	ToolTypeMCP     ToolType = "mcp"
+	ToolTypeCustom  ToolType = "custom"
+)
+
+type ToolConfig struct {
+	Type                ToolType       `yaml:"type"`
+	Name                string         `yaml:"name"`
+	Description         string         `yaml:"description,omitempty"`
+	Server              string         `yaml:"server,omitempty"`
+	Config              map[string]any `yaml:"config,omitempty"`
+	AllowWithoutConfirm bool           `yaml:"allow_without_confirm,omitempty"`
 }
 
-func (t Tool) Validate() error {
+func (t *ToolConfig) Validate() error {
 	const message = "each agent tool requires name and type"
 	return validation.ValidateStruct(&t,
 		validation.Field(&t.Name, requiredText(message)),

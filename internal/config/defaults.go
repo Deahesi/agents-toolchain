@@ -16,7 +16,7 @@ func defaultAgent(name string) *domain.AgentConfig {
 				Type: "local_file",
 				Path: "./.agent_history.json",
 			},
-			Tools: []domain.Tool{},
+			Tools: []domain.ToolConfig{},
 		},
 	}
 }
