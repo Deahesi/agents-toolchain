@@ -140,6 +140,9 @@ export async function publishPackages(artifacts, { lookup, publish, wait, log = 
 }
 
 export async function publishNpm(version = releaseVersion(), mainArchive = path.join(dist, `deahesi-agents-toolchain-${version}.tar.gz`)) {
+  checkVersion(version);
+  const expected = `deahesi-agents-toolchain-${version}.tar.gz`;
+  if (path.basename(mainArchive) !== expected) throw new Error(`Expected npm launcher archive ${expected}, received ${mainArchive}.`);
   const directory = path.dirname(path.resolve(mainArchive));
   const artifacts = readArtifacts({ directory, version });
   await publishPackages(artifacts, {

@@ -160,7 +160,12 @@ release:
 publishers:
   - name: npm
     ids: [npm-launcher]
-    cmd: 'node build/npm.mjs publish "{{ .Version }}" "{{ .ArtifactPath }}"'
+    # release.extra_files also match IDs in GoReleaser OSS. Only the launcher
+    # archive coordinates this release; other files require a harmless command.
+    cmd: >-
+      {{ if eq .ArtifactName (printf "deahesi-agents-toolchain-%s.tar.gz" .Version) }}
+      node build/npm.mjs publish "{{ .Version }}" "{{ .ArtifactPath }}"
+      {{ else }}node -e ""{{ end }}
     env:
       - 'CI={{ index .Env "CI" }}'
       - 'GITHUB_ACTIONS={{ index .Env "GITHUB_ACTIONS" }}'
@@ -179,7 +184,10 @@ publishers:
       - 'ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_TOKEN" }}'
   - name: pypi
     ids: [npm-launcher]
-    cmd: 'uv publish --trusted-publishing always --check-url https://pypi.org/simple/ "dist/wheels/*.whl"'
+    cmd: >-
+      {{ if eq .ArtifactName (printf "deahesi-agents-toolchain-%s.tar.gz" .Version) }}
+      uv publish --trusted-publishing always --check-url https://pypi.org/simple/ "dist/wheels/*.whl"
+      {{ else }}node -e ""{{ end }}
     env:
       - 'GITHUB_ACTIONS={{ index .Env "GITHUB_ACTIONS" }}'
       - 'ACTIONS_ID_TOKEN_REQUEST_URL={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_URL" }}'
