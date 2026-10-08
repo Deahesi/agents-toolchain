@@ -10,7 +10,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:          "agent-toolchain",
+	Use:          "atc",
 	Short:        "Manage and run YAML-configured agents",
 	SilenceUsage: true,
 }
