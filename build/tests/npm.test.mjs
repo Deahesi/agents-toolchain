@@ -5,7 +5,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { checkVersion, lookupIntegrity, registry, publishPackages, publishNpm, packageSpecs, readArtifacts, root, output, removeOutputDirectory } from '../npm.mjs';
+import { checkVersion, lookupIntegrity, registry, githubRegistry, publicationOptions, publishPackages, publishNpm, packageSpecs, readArtifacts, root, output, removeOutputDirectory } from '../npm.mjs';
 
 const main = { name: 'main', version: '0.1.2', target: null, integrity: 'sha512-main' };
 const native = { name: 'native', version: '0.1.2', target: 'linux-x64', integrity: 'sha512-native' };
@@ -138,7 +138,109 @@ test('rejects wheel paths at the npm entrypoint before reading checksums or publ
   await assert.rejects(publishNpm('0.1.2', path.join('dist', 'deahesi-agents-toolchain-0.1.3.tar.gz')), /Expected npm launcher archive/);
 });
 
-test('GoReleaser publishes npm and PyPI once when GitHub release extra_files include all six wheels', { timeout: 90000 }, async t => {
+test('selects the registry explicitly and requires credentials only for GitHub Packages', () => {
+  assert.deepEqual(publicationOptions('npm', { GITHUB_TOKEN: 'must-not-use' }), { registry });
+  assert.deepEqual(publicationOptions('github', { GITHUB_TOKEN: 'fixture-token' }), { registry: githubRegistry, token: 'fixture-token' });
+  assert.throws(() => publicationOptions('github', {}), /GITHUB_TOKEN with packages: write/);
+  assert.throws(() => publicationOptions('other', {}), /Unknown npm publication channel/);
+});
+
+test('GitHub lookup authenticates, selects the exact version and accepts standard shasum metadata', async () => {
+  const artifact = { ...native, name: '@deahesi/agents-toolchain-linux-x64' };
+  const destination = { registry: githubRegistry, token: 'fixture-token' };
+  const manifest = { name: artifact.name, version: artifact.version, dist: { integrity: artifact.integrity } };
+  const lookup = body => lookupIntegrity(artifact, async (url, options) => {
+    assert.equal(String(url), githubRegistry + encodeURIComponent(artifact.name));
+    assert.equal(options.headers.authorization, 'Bearer fixture-token');
+    return Response.json(body);
+  }, destination);
+  assert.equal(await lookup({ name: artifact.name, versions: { [artifact.version]: manifest, '99.0.0': {} } }), artifact.integrity);
+  assert.equal(await lookup({ name: artifact.name, versions: {} }), null);
+  const sha1 = createHash('sha1').update('fixture').digest();
+  assert.equal(await lookup({ name: artifact.name, versions: { [artifact.version]: { ...manifest, dist: { shasum: sha1.toString('hex') } } } }), 'sha1-' + sha1.toString('base64'));
+  await assert.rejects(lookup({ name: 'another-package', versions: {} }), /unexpected metadata/);
+  await assert.rejects(lookup({ name: artifact.name, versions: { [artifact.version]: { ...manifest, dist: {} } } }), /no SHA-512 integrity/);
+  await assert.rejects(lookupIntegrity(artifact, () => assert.fail('must not request without credentials'), { registry: githubRegistry }), /GITHUB_TOKEN/);
+  for (const status of [401, 403, 429, 500]) {
+    await assert.rejects(lookupIntegrity(artifact, async () => new Response('error', { status }), destination), new RegExp('HTTP ' + status));
+  }
+  assert.equal(await lookupIntegrity(artifact, async () => new Response('missing', { status: 404 }), destination), null);
+  await lookupIntegrity(native, async (url, options) => {
+    assert.equal(options.headers.authorization, undefined, 'GitHub credentials must never reach npmjs');
+    return Response.json({ ...native, dist: { integrity: native.integrity } });
+  });
+});
+
+test('publishes the same seven archives to independent registries and resumes GitHub publication', async t => {
+  mkdirSync(output, { recursive: true });
+  const directory = mkdtempSync(path.join(output, 'registry publishing '));
+  t.after(() => removeOutputDirectory(directory));
+  const version = '0.1.2';
+  const lines = packageSpecs().map(({ name }) => {
+    const filename = name.replace('@', '').replace('/', '-') + '-' + version + '.tar.gz';
+    const content = Buffer.from(name);
+    writeFileSync(path.join(directory, filename), content);
+    return createHash('sha256').update(content).digest('hex') + '  ' + filename;
+  });
+  writeFileSync(path.join(directory, 'checksums.txt'), lines.join('\n'));
+  const artifacts = readArtifacts({ directory, version });
+  const mainArchive = artifacts.at(-1).path;
+  const available = { npm: new Map(), github: new Map() };
+  const calls = [];
+  const configs = [];
+  let failAfterFirst = true;
+  const request = async (url, options) => {
+    url = new URL(url);
+    const github = url.origin === new URL(githubRegistry).origin;
+    const channel = github ? 'github' : 'npm';
+    assert.equal(options.headers.authorization, github ? 'Bearer fixture-token' : undefined);
+    const name = decodeURIComponent(url.pathname.split('/')[1]);
+    const manifest = available[channel].get(name);
+    if (!manifest) return new Response('missing', { status: 404 });
+    return Response.json(github ? { name, versions: { [version]: manifest } } : manifest);
+  };
+  const npmImpl = (args, options) => {
+    const channel = args[args.indexOf('--registry') + 1] === githubRegistry ? 'github' : 'npm';
+    const artifact = artifacts.find(item => item.path === args[1]);
+    assert.ok(artifact, 'must publish original checksummed archive');
+    assert.ok(args.includes('--tag'));
+    if (channel === 'github') {
+      assert.equal(options.env.GITHUB_TOKEN, 'fixture-token');
+      const config = options.env.NPM_CONFIG_USERCONFIG;
+      configs.push(config);
+      const contents = readFileSync(config, 'utf8');
+      assert.ok(contents.includes('@deahesi:registry=' + githubRegistry));
+      assert.ok(contents.includes('//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}'));
+      assert.ok(!contents.includes('fixture-token'), 'credential must not be written to disk');
+      if (failAfterFirst && available.github.size === 1) throw new Error('simulated interruption');
+    } else {
+      assert.equal(options.env.GITHUB_TOKEN, undefined);
+      assert.equal(options.env.NPM_CONFIG_USERCONFIG, undefined);
+    }
+    if (!artifact.target) assert.equal(available[channel].size, 6, 'all dependencies must be visible first');
+    calls.push({ channel, name: artifact.name });
+    const dist = channel === 'github'
+      ? { shasum: createHash('sha1').update(readFileSync(artifact.path)).digest('hex') }
+      : { integrity: artifact.integrity };
+    available[channel].set(artifact.name, { name: artifact.name, version, dist });
+  };
+  const options = { request, npmImpl, env: {}, wait: () => assert.fail('fixture is immediately visible'), log: () => {} };
+  await publishNpm(version, mainArchive, 'npm', options);
+  const githubOptions = { ...options, env: { GITHUB_TOKEN: 'fixture-token' } };
+  await assert.rejects(publishNpm(version, mainArchive, 'github', githubOptions), /simulated interruption/);
+  assert.ok(configs.every(config => !existsSync(config)), 'temporary config must be removed on failure');
+  failAfterFirst = false;
+  await publishNpm(version, mainArchive, 'github', githubOptions);
+  await publishNpm(version, mainArchive, 'github', githubOptions);
+  assert.equal(calls.filter(call => call.channel === 'npm').length, 7);
+  assert.equal(calls.filter(call => call.channel === 'github').length, 7);
+  assert.ok(configs.every(config => !existsSync(config)), 'temporary config must be removed after success');
+  available.github.get(artifacts[0].name).dist.shasum = '0'.repeat(40);
+  await assert.rejects(publishNpm(version, mainArchive, 'github', githubOptions), /different contents/);
+  assert.equal(calls.length, 14, 'must not overwrite conflicting versions');
+});
+
+test('GoReleaser publishes npm, GitHub Packages and PyPI once when GitHub release extra_files include all six wheels', { timeout: 90000 }, async t => {
   const localTool = path.join(root, '.tmp/tools/goreleaser', process.platform === 'win32' ? 'goreleaser.exe' : 'goreleaser');
   const goreleaser = existsSync(localTool) ? localTool : 'goreleaser';
   if (spawnSync(goreleaser, ['--version'], { stdio: 'ignore' }).status !== 0) {
@@ -198,7 +300,7 @@ test('GoReleaser publishes npm and PyPI once when GitHub release extra_files inc
   mkdirSync(path.join(directory, 'build'));
   mkdirSync(path.join(directory, '.tmp'));
   mkdirSync(path.join(directory, 'wheels'));
-  const record = publisher => "import { appendFileSync } from 'node:fs';\nappendFileSync('.tmp/calls.jsonl', JSON.stringify({ publisher: '" + publisher + "', args: process.argv.slice(2), oidc: { githubActions: process.env.GITHUB_ACTIONS, requestUrl: process.env.ACTIONS_ID_TOKEN_REQUEST_URL, requestToken: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN } }) + '\\n');\n";
+  const record = publisher => "import { appendFileSync } from 'node:fs';\nappendFileSync('.tmp/calls.jsonl', JSON.stringify({ publisher: '" + publisher + "', args: process.argv.slice(2), githubToken: process.env.GITHUB_TOKEN, oidc: { githubActions: process.env.GITHUB_ACTIONS, requestUrl: process.env.ACTIONS_ID_TOKEN_REQUEST_URL, requestToken: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN } }) + '\\n');\n";
   writeFileSync(path.join(directory, 'build/npm.mjs'), record('npm'));
   writeFileSync(path.join(directory, 'build/pypi-test.mjs'), record('pypi'));
   const wheels = ['win_amd64', 'win_arm64', 'macosx_12_0_x86_64', 'macosx_12_0_arm64', 'manylinux_2_17_x86_64', 'manylinux_2_17_aarch64'].map(platform => 'agents_toolchain-0.1.2-py3-none-' + platform + '.whl');
@@ -222,10 +324,13 @@ test('GoReleaser publishes npm and PyPI once when GitHub release extra_files inc
   assert.equal(code, 0, processOutput.slice(-12000));
   for (const wheel of wheels) assert.ok(uploads.includes(wheel), 'Wheel must pass through the real release.extra_files pipeline: ' + wheel);
   const calls = readFileSync(path.join(directory, '.tmp/calls.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(calls.map(call => call.publisher), ['npm', 'pypi']);
-  for (const call of calls) assert.deepEqual(call.oidc, { githubActions: 'true', requestUrl: endpoint + '/oidc?fixture=1&run=2', requestToken: 'fake-oidc-fixture-token' }, call.publisher + ' must receive the GitHub OIDC environment unchanged');
+  assert.deepEqual(calls.map(call => call.publisher), ['npm', 'npm', 'pypi']);
+  assert.equal(calls[1].githubToken, 'local-integration-fixture');
+  assert.deepEqual(calls[1].oidc, {}, 'GitHub Packages uses GITHUB_TOKEN without npmjs OIDC');
+  for (const call of [calls[0], calls[2]]) assert.deepEqual(call.oidc, { githubActions: 'true', requestUrl: endpoint + '/oidc?fixture=1&run=2', requestToken: 'fake-oidc-fixture-token' }, call.publisher + ' must receive the GitHub OIDC environment unchanged');
   assert.equal(calls[0].args[0], 'publish');
   assert.equal(calls[0].args[1], '0.1.2');
   assert.equal(path.basename(calls[0].args[2]), 'deahesi-agents-toolchain-0.1.2.tar.gz');
-  assert.deepEqual(calls[1].args, ['publish', '--trusted-publishing', 'always', '--check-url', 'https://pypi.org/simple/', 'dist/wheels/*.whl']);
+  assert.deepEqual(calls[1].args, [...calls[0].args, 'github']);
+  assert.deepEqual(calls[2].args, ['publish', '--trusted-publishing', 'always', '--check-url', 'https://pypi.org/simple/', 'dist/wheels/*.whl']);
 });

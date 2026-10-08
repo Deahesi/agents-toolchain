@@ -12,6 +12,7 @@ All release packages contain a ready-to-run Go binary. The command is always `at
 
 Requires Node.js 22 or later. Install globally:
 
+[![npm](https://img.shields.io/npm/v/@deahesi/agents-toolchain)](https://www.npmjs.com/package/@deahesi/agents-toolchain)
 ```sh
 npm install -g @deahesi/agents-toolchain
 atc --help
@@ -26,6 +27,8 @@ npx @deahesi/agents-toolchain init
 ```
 
 The npm package includes a launcher and installs the native binary for Windows, Linux, or macOS on x64 or ARM64. Go is not required. Installation also works with `--ignore-scripts`; keep optional dependencies enabled so npm can install the platform package. An unsupported platform or a missing platform package produces an error with installation guidance. The command is `atc` for both local and global installations.
+
+Releases also publish the same seven npm packages to [GitHub Packages](https://github.com/Deahesi/agents-toolchain/packages). The default commands above use npmjs.com. GitHub Packages requires registry configuration and authentication even for public npm packages; see [release and registry setup](build/README.md).
 
 ### Homebrew (macOS, Linux)
 

@@ -183,6 +183,14 @@ publishers:
       - 'RUNNER_ENVIRONMENT={{ index .Env "RUNNER_ENVIRONMENT" }}'
       - 'ACTIONS_ID_TOKEN_REQUEST_URL={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_URL" }}'
       - 'ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_TOKEN" }}'
+  - name: github-packages
+    ids: [npm-launcher]
+    cmd: >-
+      {{ if eq .ArtifactName (printf "deahesi-agents-toolchain-%s.tar.gz" .Version) }}
+      node build/npm.mjs publish "{{ .Version }}" "{{ .ArtifactPath }}" github
+      {{ else }}node -e ""{{ end }}
+    env:
+      - 'GITHUB_TOKEN={{ index .Env "GITHUB_TOKEN" }}'
   - name: pypi
     ids: [npm-launcher]
     cmd: >-

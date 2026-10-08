@@ -146,6 +146,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: write
+      packages: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -171,7 +172,7 @@ jobs:
           distribution: goreleaser
           version: v2.18.2
           install-only: true
-      - name: Publish GitHub assets, Homebrew, npm and PyPI through GoReleaser
+      - name: Publish GitHub assets, Homebrew, npm, GitHub Packages and PyPI through GoReleaser
         run: goreleaser release --config build/goreleaser.yaml --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
