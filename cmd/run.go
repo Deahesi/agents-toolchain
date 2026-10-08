@@ -23,10 +23,15 @@ var runCmd = &cobra.Command{
 
 		prompt, err := cmd.Flags().GetString("prompt")
 		if err != nil {
-			uiService.LogError(err)
-			return err
+			uiService.LogError(err.Error())
+			return nil
 		}
-		return agentService.Run(uiService.Context(), args[0], prompt, cmd.OutOrStdout())
+		err = agentService.Run(uiService.Context(), args[0], prompt, cmd.OutOrStdout())
+		if err != nil {
+			uiService.LogError(err.Error())
+			return nil
+		}
+		return nil
 	},
 }
 

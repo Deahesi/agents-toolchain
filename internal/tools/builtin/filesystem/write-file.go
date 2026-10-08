@@ -14,7 +14,7 @@ type WriteFileInput struct {
 }
 type WriteFileOutput struct {
 	Success bool   `json:"success"`
-	Message string `json:"message"`
+	Message string `json:"message,omitempty"`
 }
 
 func DefineWriteFileTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[WriteFileInput, WriteFileOutput] {

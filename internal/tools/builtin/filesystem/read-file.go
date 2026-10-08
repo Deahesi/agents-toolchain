@@ -13,8 +13,8 @@ type ReadFileInput struct {
 }
 type ReadFileOutput struct {
 	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Content string `json:"content"`
+	Message string `json:"message,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
 func DefineReadFileTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[ReadFileInput, ReadFileOutput] {
