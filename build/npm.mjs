@@ -147,7 +147,7 @@ export async function publishNpm(version = releaseVersion(), mainArchive = path.
   const artifacts = readArtifacts({ directory, version });
   await publishPackages(artifacts, {
     lookup: lookupIntegrity,
-    publish: artifact => npm(['publish', artifact.path, '--access', 'public', '--tag', 'latest', '--registry', registry]),
+    publish: artifact => npm(['publish', artifact.path, '--access', 'public', '--tag', 'latest', '--registry', registry, '--loglevel=verbose']),
     wait: () => setTimeout(5000),
   });
 }

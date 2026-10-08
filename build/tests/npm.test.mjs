@@ -198,12 +198,12 @@ test('GoReleaser publishes npm and PyPI once when GitHub release extra_files inc
   mkdirSync(path.join(directory, 'build'));
   mkdirSync(path.join(directory, '.tmp'));
   mkdirSync(path.join(directory, 'wheels'));
-  const record = publisher => "import { appendFileSync } from 'node:fs';\nappendFileSync('.tmp/calls.jsonl', JSON.stringify({ publisher: '" + publisher + "', args: process.argv.slice(2) }) + '\\n');\n";
+  const record = publisher => "import { appendFileSync } from 'node:fs';\nappendFileSync('.tmp/calls.jsonl', JSON.stringify({ publisher: '" + publisher + "', args: process.argv.slice(2), oidc: { githubActions: process.env.GITHUB_ACTIONS, requestUrl: process.env.ACTIONS_ID_TOKEN_REQUEST_URL, requestToken: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN } }) + '\\n');\n";
   writeFileSync(path.join(directory, 'build/npm.mjs'), record('npm'));
   writeFileSync(path.join(directory, 'build/pypi-test.mjs'), record('pypi'));
   const wheels = ['win_amd64', 'win_arm64', 'macosx_12_0_x86_64', 'macosx_12_0_arm64', 'manylinux_2_17_x86_64', 'manylinux_2_17_aarch64'].map(platform => 'agents_toolchain-0.1.2-py3-none-' + platform + '.whl');
   for (const wheel of wheels) writeFileSync(path.join(directory, 'wheels', wheel), 'fixture wheel\n');
-  const env = { ...process.env, GITHUB_TOKEN: 'local-integration-fixture', GITHUB_REPOSITORY: 'fixture/agents-toolchain', GITHUB_REF: 'refs/tags/v0.1.2', GITHUB_EVENT_NAME: 'push', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'safe.directory', GIT_CONFIG_VALUE_0: directory };
+  const env = { ...process.env, GITHUB_ACTIONS: 'true', ACTIONS_ID_TOKEN_REQUEST_URL: endpoint + '/oidc?fixture=1&run=2', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'fake-oidc-fixture-token', GITHUB_TOKEN: 'local-integration-fixture', GITHUB_REPOSITORY: 'fixture/agents-toolchain', GITHUB_REF: 'refs/tags/v0.1.2', GITHUB_EVENT_NAME: 'push', GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'safe.directory', GIT_CONFIG_VALUE_0: directory };
   const git = args => execFileSync('git', args, { cwd: directory, env, stdio: 'pipe', encoding: 'utf8' });
   git(['init', '-b', 'main']);
   git(['add', '.']);
@@ -223,6 +223,7 @@ test('GoReleaser publishes npm and PyPI once when GitHub release extra_files inc
   for (const wheel of wheels) assert.ok(uploads.includes(wheel), 'Wheel must pass through the real release.extra_files pipeline: ' + wheel);
   const calls = readFileSync(path.join(directory, '.tmp/calls.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(calls.map(call => call.publisher), ['npm', 'pypi']);
+  for (const call of calls) assert.deepEqual(call.oidc, { githubActions: 'true', requestUrl: endpoint + '/oidc?fixture=1&run=2', requestToken: 'fake-oidc-fixture-token' }, call.publisher + ' must receive the GitHub OIDC environment unchanged');
   assert.equal(calls[0].args[0], 'publish');
   assert.equal(calls[0].args[1], '0.1.2');
   assert.equal(path.basename(calls[0].args[2]), 'deahesi-agents-toolchain-0.1.2.tar.gz');

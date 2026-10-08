@@ -149,6 +149,7 @@ changelog:
   disable: true
 
 release:
+  replace_existing_artifacts: true
   github:
     owner: Deahesi
     name: agents-toolchain
