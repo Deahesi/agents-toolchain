@@ -1,0 +1,174 @@
+name: Packages and release
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.12.23'
+          enable-cache: false
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          install-only: true
+      - run: goreleaser check --config build/goreleaser.yaml
+      - run: go test ./...
+      - run: node --test build/tests/launcher.test.mjs build/tests/npm.test.mjs
+      - run: python -m unittest discover -s build/tests -p test_*.py
+      - run: goreleaser release --config build/goreleaser.yaml --clean ${{ startsWith(github.ref, 'refs/tags/') && '--skip=publish' || '--snapshot' }}
+      - run: python build/tests/check_artifacts.py
+      - run: uv publish --dry-run --trusted-publishing never "dist/wheels/*.whl"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-packages
+          path: |
+            dist/metadata.json
+            dist/artifacts.json
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/checksums.txt
+            dist/wheels/*.whl
+            dist/homebrew/Casks/*.rb
+          include-hidden-files: true
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: Homebrew/actions/setup-homebrew@1f8e202ffddf94def7f42f6fa3a482e821489f9c # 2026.07.10.1
+        if: runner.os != 'Windows'
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - run: go test ./...
+      - run: node --test build/tests/launcher.test.mjs build/tests/npm.test.mjs
+      - run: python -m unittest discover -s build/tests -p test_*.py
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-packages
+          path: dist
+      - run: python build/tests/check_artifacts.py
+      - run: node build/tests/npm-smoke.mjs
+      - run: python build/tests/python_smoke.py
+      - name: Install the generated Homebrew cask using local archives
+        if: runner.os != 'Windows'
+        run: python build/tests/homebrew_smoke.py
+
+  linux-packages:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-packages
+          path: dist
+      - name: Inspect both architectures and install the Debian package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          python build/tests/check_linux.py
+          sudo dpkg -i dist/*_amd64.deb
+          atc --help
+          atc --version
+          mkdir -p .tmp/deb-smoke
+          cd .tmp/deb-smoke
+          atc init
+          test -f agents-toolchain.yml
+      - name: Install the RPM in Fedora
+        run: |
+          docker run --rm -v "$PWD/dist:/packages:ro" fedora:43 bash -ceu '
+            rpm -i /packages/*.x86_64.rpm
+            atc --help
+            atc --version
+            mkdir -p /tmp/atc-smoke
+            cd /tmp/atc-smoke
+            atc init
+            test -f agents-toolchain.yml
+          '
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke, linux-packages]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.12.23'
+          enable-cache: false
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          install-only: true
+      - name: Publish GitHub assets, Homebrew, npm and PyPI through GoReleaser
+        run: goreleaser release --config build/goreleaser.yaml --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+

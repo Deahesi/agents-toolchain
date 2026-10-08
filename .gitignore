@@ -3,6 +3,9 @@
 /agent-toolchain
 /agent-toolchain.exe
 /coverage.out
+/node_modules/
+__pycache__/
+*.pyc
 .agent_history.json
 .agent-history-*
 .env
@@ -10,3 +13,4 @@
 !.env.example
 /agents/
 agents-toolchain.yml
+/dist/

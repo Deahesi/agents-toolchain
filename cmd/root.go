@@ -9,9 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:          "atc",
 	Short:        "Manage and run YAML-configured agents",
+	Version:      version,
 	SilenceUsage: true,
 }
 

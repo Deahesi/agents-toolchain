@@ -4,15 +4,77 @@
 
 A CLI for creating and running AI agents. Define an agent's task, model, and tools in YAML, then run it from the terminal. Agents can read project files, write documentation and tests, or review code.
 
-## Base usage
+## Installation
 
-Requires Go 1.26.5 or later. Install the CLI:
+All release packages contain a ready-to-run Go binary. The command is always `atc`.
+
+### npm (Windows, Linux, macOS)
+
+Requires Node.js 22 or later. Install globally:
+
+```sh
+npm install -g @deahesi/agents-toolchain
+atc --help
+atc --version
+```
+
+Or run it without a global installation:
+
+```sh
+npx @deahesi/agents-toolchain --help
+npx @deahesi/agents-toolchain init
+```
+
+The npm package includes a launcher and installs the native binary for Windows, Linux, or macOS on x64 or ARM64. Go is not required. Installation also works with `--ignore-scripts`; keep optional dependencies enabled so npm can install the platform package. An unsupported platform or a missing platform package produces an error with installation guidance. The command is `atc` for both local and global installations.
+
+### Homebrew (macOS, Linux)
+
+```sh
+brew install --cask Deahesi/tap/agents-toolchain
+atc --help
+```
+
+The cask selects the x64 or ARM64 archive from GitHub Releases. It requires neither Go nor Node.js. Updates use `brew upgrade --cask agents-toolchain`.
+
+### pip (Windows, Linux, macOS)
+
+Requires Python 3.10 or later. Install in your Python virtual environment:
+
+```sh
+python -m pip install agents-toolchain
+atc --help
+python -m agents_toolchain --version
+```
+
+Platform wheels include the native binary; installation does not compile Go or download executables from GitHub. Wheels cover x64 and ARM64 on Windows, macOS 12+, and Linux with glibc or musl. There is no source distribution that would require a Go compiler. Keep your virtual environment activated to use its `atc` command.
+
+### Debian / Ubuntu and RPM distributions
+
+Download the package for your architecture from [GitHub Releases](https://github.com/Deahesi/agents-toolchain/releases). For example, for version `0.1.2` on x64:
+
+```sh
+# Debian / Ubuntu
+sudo apt install ./agents-toolchain_0.1.2_amd64.deb
+
+# Fedora / RHEL family
+sudo dnf install ./agents-toolchain-0.1.2-1.x86_64.rpm
+
+atc --help
+```
+
+ARM64 packages end in `_arm64.deb` and `.aarch64.rpm`. Packages install `/usr/bin/atc`, the README, and the MIT license. These are downloadable packages, not an APT or YUM repository.
+
+### From source
+
+Alternatively, build from source with Go 1.26.5 or later:
 
 ```powershell
 go install github.com/Deahesi/agents-toolchain/cmd/atc@latest
 ```
 
 Make sure the installation directory is in `PATH`. Go uses `GOBIN` if set, otherwise `GOPATH/bin` (usually `%USERPROFILE%\go\bin` on Windows). `go install` does not update `PATH`; after adding the directory, open a new terminal.
+
+## Base usage
 
 Run the following steps from the project directory you want the agent to work on.
 

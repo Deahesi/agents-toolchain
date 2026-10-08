@@ -1,0 +1,21 @@
+{
+  "name": "@deahesi/agents-toolchain",
+  "description": "CLI for creating and running YAML-configured AI agents",
+  "license": "MIT",
+  "author": "Deahesi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Deahesi/agents-toolchain.git"
+  },
+  "homepage": "https://github.com/Deahesi/agents-toolchain#readme",
+  "bugs": "https://github.com/Deahesi/agents-toolchain/issues",
+  "keywords": [
+    "cli",
+    "agents",
+    "ai",
+    "toolchain"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

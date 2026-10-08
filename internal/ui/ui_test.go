@@ -120,7 +120,7 @@ func TestInputComponentsSubmitAndCancel(t *testing.T) {
 	}
 	multiline.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	multiline.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Второй абзац"), Paste: true})
-	_, result = multiline.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	_, result = multiline.Update(tea.KeyMsg{Type: tea.KeyTab})
 	if result == nil || result.value != "Первый абзац\n\nВторой абзац" {
 		t.Fatalf("multiline paragraphs were not preserved: %+v", result)
 	}

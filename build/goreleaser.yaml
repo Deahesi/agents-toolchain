@@ -1,0 +1,186 @@
+version: 2
+project_name: agents-toolchain
+dist: dist
+
+before:
+  hooks:
+    - 'node build/npm.mjs prepare "{{ .Version }}"'
+
+builds:
+  - id: atc
+    main: ./cmd/atc
+    binary: bin/atc
+    env: [CGO_ENABLED=0]
+    goos: [windows, linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags:
+      - -s -w -X github.com/Deahesi/agents-toolchain/cmd.version={{ .Version }}
+    hooks:
+      post:
+        - cmd: 'python build/build_wheel.py "{{ .Version }}" "{{ .Path }}" {{ .Os }} {{ .Arch }}'
+          output: true
+
+archives:
+  - id: native
+    ids: [atc]
+    formats: [tar.gz]
+    strip_binary_directory: true
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    builds_info:
+      owner: root
+      group: root
+      mtime: '{{ .CommitDate }}'
+    files:
+      - src: LICENSE
+        info: &native_text
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: README.md
+        info: *native_text
+  - id: npm
+    ids: [atc]
+    formats: [tar.gz]
+    name_template: 'deahesi-agents-toolchain-{{ if eq .Os "windows" }}win32{{ else }}{{ .Os }}{{ end }}-{{ if eq .Arch "amd64" }}x64{{ else }}{{ .Arch }}{{ end }}-{{ .Version }}'
+    wrap_in_directory: package
+    strip_binary_directory: false
+    builds_info:
+      owner: root
+      group: root
+      mtime: '1985-10-26T08:15:00Z'
+    files:
+      - src: '.tmp/packaging/npm/agents-toolchain-{{ if eq .Os "windows" }}win32{{ else }}{{ .Os }}{{ end }}-{{ if eq .Arch "amd64" }}x64{{ else }}{{ .Arch }}{{ end }}/*'
+        dst: .
+        strip_parent: true
+        info: &text_file
+          owner: root
+          group: root
+          mode: 0644
+          mtime: '1985-10-26T08:15:00Z'
+  - id: npm-launcher
+    meta: true
+    formats: [tar.gz]
+    name_template: 'deahesi-agents-toolchain-{{ .Version }}'
+    wrap_in_directory: package
+    files:
+      - src: .tmp/packaging/npm/agents-toolchain/LICENSE
+        dst: .
+        strip_parent: true
+        info: *text_file
+      - src: .tmp/packaging/npm/agents-toolchain/README.md
+        dst: .
+        strip_parent: true
+        info: *text_file
+      - src: .tmp/packaging/npm/agents-toolchain/package.json
+        dst: .
+        strip_parent: true
+        info: *text_file
+      - src: .tmp/packaging/npm/agents-toolchain/bin/platforms.cjs
+        dst: bin
+        strip_parent: true
+        info: *text_file
+      - src: .tmp/packaging/npm/agents-toolchain/bin/atc.cjs
+        dst: bin
+        strip_parent: true
+        info:
+          owner: root
+          group: root
+          mode: 0755
+          mtime: '1985-10-26T08:15:00Z'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}'
+
+checksum:
+  name_template: checksums.txt
+  extra_files:
+    - glob: dist/wheels/*.whl
+
+nfpms:
+  - id: linux
+    ids: [atc]
+    package_name: agents-toolchain
+    file_name_template: '{{ .ConventionalFileName }}'
+    formats: [deb, rpm]
+    maintainer: Deahesi <vladimir006154@gmail.com>
+    vendor: Deahesi
+    homepage: https://github.com/Deahesi/agents-toolchain
+    description: CLI for creating and running YAML-configured AI agents
+    license: MIT
+    section: utils
+    priority: optional
+    mtime: '{{ .CommitDate }}'
+    # The build's binary name already includes bin/.
+    bindir: /usr
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/agents-toolchain/LICENSE
+        file_info:
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+      - src: README.md
+        dst: /usr/share/doc/agents-toolchain/README.md
+        file_info:
+          mode: 0644
+          mtime: '{{ .CommitDate }}'
+
+homebrew_casks:
+  - name: agents-toolchain
+    ids: [native]
+    binaries: [atc]
+    homepage: https://github.com/Deahesi/agents-toolchain
+    description: CLI for creating and running YAML-configured AI agents
+    url:
+      template: 'https://github.com/Deahesi/agents-toolchain/releases/download/{{ .Tag }}/{{ .ArtifactName }}'
+    repository:
+      owner: Deahesi
+      name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-d", "com.apple.quarantine", "#{staged_path}/atc"], must_succeed: false
+          end
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: Deahesi
+    name: agents-toolchain
+  extra_files:
+    - glob: dist/wheels/*.whl
+
+# OSS extension point: npm's built-in Pro publisher downloads during postinstall.
+# Publish our archives once, with all platform dependencies available first.
+publishers:
+  - name: npm
+    ids: [npm-launcher]
+    cmd: 'node build/npm.mjs publish "{{ .Version }}" "{{ .ArtifactPath }}"'
+    env:
+      - 'CI={{ index .Env "CI" }}'
+      - 'GITHUB_ACTIONS={{ index .Env "GITHUB_ACTIONS" }}'
+      - 'GITHUB_REPOSITORY={{ index .Env "GITHUB_REPOSITORY" }}'
+      - 'GITHUB_SERVER_URL={{ index .Env "GITHUB_SERVER_URL" }}'
+      - 'GITHUB_REF={{ index .Env "GITHUB_REF" }}'
+      - 'GITHUB_SHA={{ index .Env "GITHUB_SHA" }}'
+      - 'GITHUB_WORKFLOW_REF={{ index .Env "GITHUB_WORKFLOW_REF" }}'
+      - 'GITHUB_EVENT_NAME={{ index .Env "GITHUB_EVENT_NAME" }}'
+      - 'GITHUB_REPOSITORY_ID={{ index .Env "GITHUB_REPOSITORY_ID" }}'
+      - 'GITHUB_REPOSITORY_OWNER_ID={{ index .Env "GITHUB_REPOSITORY_OWNER_ID" }}'
+      - 'GITHUB_RUN_ID={{ index .Env "GITHUB_RUN_ID" }}'
+      - 'GITHUB_RUN_ATTEMPT={{ index .Env "GITHUB_RUN_ATTEMPT" }}'
+      - 'RUNNER_ENVIRONMENT={{ index .Env "RUNNER_ENVIRONMENT" }}'
+      - 'ACTIONS_ID_TOKEN_REQUEST_URL={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_URL" }}'
+      - 'ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_TOKEN" }}'
+  - name: pypi
+    ids: [npm-launcher]
+    cmd: 'uv publish --trusted-publishing always --check-url https://pypi.org/simple/ "dist/wheels/*.whl"'
+    env:
+      - 'GITHUB_ACTIONS={{ index .Env "GITHUB_ACTIONS" }}'
+      - 'ACTIONS_ID_TOKEN_REQUEST_URL={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_URL" }}'
+      - 'ACTIONS_ID_TOKEN_REQUEST_TOKEN={{ index .Env "ACTIONS_ID_TOKEN_REQUEST_TOKEN" }}'
