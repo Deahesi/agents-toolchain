@@ -1,5 +1,5 @@
 // GoReleaser adapter for npm's platform packages. No build orchestration.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -42,11 +42,6 @@ function npmCommand(args) {
 export function npm(args, options = {}) {
   const [command, commandArgs] = npmCommand(args);
   return run(command, commandArgs, options);
-}
-
-export function npmResult(args, options = {}) {
-  const [command, commandArgs] = npmCommand(args);
-  return spawnSync(command, commandArgs, { cwd: root, encoding: 'utf8', ...options });
 }
 
 export function removeOutputDirectory(directory) {
@@ -99,22 +94,30 @@ export function readArtifacts({ directory = dist, version = releaseVersion(direc
   });
 }
 
-export function parseRegistryResult(result, name) {
-  if (result.error) throw result.error;
-  if (result.status === 0) {
-    const parsed = JSON.parse(result.stdout);
-    // npm 12 wraps even a single queried field in an array; npm <=11 unwraps it.
-    const value = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
-    if (typeof value !== 'string' || !value.startsWith('sha512-')) throw new Error(`Registry returned no SHA-512 integrity for ${name}.`);
-    return value;
+export async function lookupIntegrity({ name, version }, request = fetch) {
+  const id = `${name}@${version}`;
+  // npm view reads the package-wide document, which can still return 404
+  // after the exact version has been published. Query the version directly.
+  const url = new URL(`${encodeURIComponent(name)}/${encodeURIComponent(version)}`, registry);
+  let response;
+  try {
+    response = await request(url, { cache: 'no-store', headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+  } catch (error) {
+    throw new Error(`Cannot query ${id}: ${error.message}`, { cause: error });
   }
-  let code;
-  try { code = JSON.parse(result.stdout).error?.code; } catch { /* npm may report errors only on stderr. */ }
-  if (code === 'E404' || /\bnpm (?:error|ERR!) code E404\b/.test(result.stderr || '')) return null;
-  throw new Error(`Cannot query ${name}: ${result.stderr || result.stdout || `exit ${result.status}`}`);
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 404) return null;
+    throw new Error(`Cannot query ${id}: registry returned HTTP ${response.status}.`);
+  }
+  const manifest = await response.json();
+  if (manifest.name !== name || manifest.version !== version) throw new Error(`Registry returned unexpected metadata for ${id}.`);
+  const integrity = manifest.dist?.integrity;
+  if (typeof integrity !== 'string' || !integrity.startsWith('sha512-')) throw new Error(`Registry returned no SHA-512 integrity for ${id}.`);
+  return integrity;
 }
 
-export async function publishPackages(artifacts, { lookup, publish, wait, log = console.log, attempts = 12 }) {
+export async function publishPackages(artifacts, { lookup, publish, wait, log = console.log, attempts = 60 }) {
   const ordered = [...artifacts.filter(item => item.target), ...artifacts.filter(item => !item.target)];
   for (const artifact of ordered) {
     let found = await lookup(artifact);
@@ -127,9 +130,11 @@ export async function publishPackages(artifacts, { lookup, publish, wait, log = 
     for (let attempt = 0; attempt < attempts; attempt++) {
       found = await lookup(artifact);
       if (found) break;
+      if (attempt === 0) log(`Waiting for registry visibility: ${artifact.name}@${artifact.version}`);
       if (attempt + 1 < attempts) await wait();
     }
-    if (found !== artifact.integrity) throw new Error(`Published package ${artifact.name}@${artifact.version} is not available with the expected integrity; rerun after checking the registry.`);
+    if (!found) throw new Error(`Published package ${artifact.name}@${artifact.version} is not available in the registry yet after ${attempts} checks. Keep dist/ unchanged and rerun "node build/npm.mjs publish".`);
+    if (found !== artifact.integrity) throw new Error(`${artifact.name}@${artifact.version} is already published with different contents.`);
     log(`Published: ${artifact.name}@${artifact.version}`);
   }
 }
@@ -138,7 +143,7 @@ export async function publishNpm(version = releaseVersion(), mainArchive = path.
   const directory = path.dirname(path.resolve(mainArchive));
   const artifacts = readArtifacts({ directory, version });
   await publishPackages(artifacts, {
-    lookup: artifact => parseRegistryResult(npmResult(['view', `${artifact.name}@${artifact.version}`, 'dist.integrity', '--json', '--registry', registry, '--fetch-retries=0', '--fetch-timeout=15000']), artifact.name),
+    lookup: lookupIntegrity,
     publish: artifact => npm(['publish', artifact.path, '--access', 'public', '--tag', 'latest', '--registry', registry]),
     wait: () => setTimeout(5000),
   });
