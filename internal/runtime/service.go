@@ -10,6 +10,7 @@ import (
 	"github.com/Deahesi/agents-toolchain/internal/agents"
 	"github.com/Deahesi/agents-toolchain/internal/config"
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/Deahesi/agents-toolchain/internal/tools"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
@@ -38,6 +39,16 @@ func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.
 	if err != nil {
 		return err
 	}
+	err = configuration.Validate()
+	if err != nil {
+		return err
+	}
+
+	root, err := files.OpenRoot(configuration.Agent.WorkDir)
+	if err != nil {
+		return fmt.Errorf("open agent work directory: %w", err)
+	}
+	defer root.Close()
 
 	providerPlugin, err := agents.GetProviderPlugin(ctx, configuration.Agent.Provider)
 	if err != nil {
@@ -48,7 +59,7 @@ func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.
 		ctx,
 		providerPlugin,
 	)
-	s.toolRegistration = tools.NewToolRegistration(s.runtime, configuration.Agent.Tools)
+	s.toolRegistration = tools.NewToolRegistration(s.runtime, configuration.Agent.Tools, root)
 	s.toolRegistration.Register()
 
 	if strings.TrimSpace(input) == "" {
@@ -63,6 +74,11 @@ func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.
 }
 
 func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input string) (err error) {
+	config, err := agents.GetProviderConfig(ctx, &agent)
+	if err != nil {
+		return fmt.Errorf("configure provider %q: %w", agent.Provider, err)
+	}
+
 	var text strings.Builder
 
 	spinner, err := s.ui.LogSpinnerTimer(time.Second, "Generating response")
@@ -79,7 +95,7 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input s
 	var lastPart ai.PartKind
 	response, err := genkit.Generate(ctx, s.runtime,
 		ai.WithModelName(fmt.Sprintf("%s/%s", agent.Provider, agent.Model)),
-		ai.WithConfig(map[string]any{"temperature": agent.Temperature}),
+		ai.WithConfig(config),
 		ai.WithSystemParts(ai.NewTextPart(agent.SystemPrompt)),
 		ai.WithPromptParts(ai.NewTextPart(input)),
 		ai.WithTools(s.toolRegistration.Tools...),
@@ -121,6 +137,11 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input s
 	}
 	if text.Len() > 0 && !strings.HasSuffix(text.String(), "\n") {
 		area.Update("\n")
+	}
+
+	if strings.TrimSpace(text.String()) == "" {
+		spinner.Fail()
+		return fmt.Errorf("model returned no final text (only reasoning or an empty response)")
 	}
 
 	spinner.Success()

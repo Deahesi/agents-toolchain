@@ -1,10 +1,8 @@
 package filesystem
 
 import (
-	"os"
-	"strings"
-
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
@@ -20,20 +18,13 @@ type EditFileOutput struct {
 	Message string `json:"message,omitempty"`
 }
 
-func DefineEditFileTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[EditFileInput, EditFileOutput] {
+func DefineEditFileTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.Root) *ai.ToolAction[EditFileInput, EditFileOutput] {
 	return genkit.DefineTool(
 		g,
 		"edit_file",
-		"Edits existing file by replacing search_str with replace_str. Set replace_count=1 for single or -1 for all occurrences. Do not use for creating files.",
+		"Edits an existing file relative to the configured work directory by replacing search_str with replace_str. Set replace_count=1 for single or -1 for all occurrences. Absolute paths, '..' and links outside that directory are forbidden.",
 		func(ctx *ai.ToolContext, input EditFileInput) (EditFileOutput, error) {
-			bytes, err := os.ReadFile(input.Path)
-			if err != nil {
-				return EditFileOutput{Success: false, Message: err.Error()}, nil
-			}
-
-			result := strings.Replace(string(bytes), input.SearchStr, input.ReplaceStr, input.ReplaceCount)
-
-			err = os.WriteFile(input.Path, []byte(result), 0666)
+			err := root.Replace(input.Path, input.SearchStr, input.ReplaceStr, input.ReplaceCount)
 			if err != nil {
 				return EditFileOutput{Success: false, Message: err.Error()}, nil
 			}

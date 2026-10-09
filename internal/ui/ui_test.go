@@ -37,6 +37,8 @@ func TestLiveComponentsShareRendererAndFlushFullResponse(t *testing.T) {
 	full := strings.Repeat("Длинный абзац с Unicode 🙂 и переносами. ", 100) + "\n\nПоследняя строка.\n"
 	area.Update(full)
 	s.LogStep("A log while both components are active")
+	s.PrintFields("Structured record", []Field{{Label: "Name", Value: "docs"}})
+	s.PrintTable([]string{"TABLE_NAME", "MODEL"}, [][]string{{"docs", "gpt-4o"}})
 	loading.Success("Completed")
 	loading.Fail("Must not appear")
 	if s.session != current || current.refs != 1 {
@@ -56,6 +58,11 @@ func TestLiveComponentsShareRendererAndFlushFullResponse(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "Must not appear") {
 		t.Fatal("spinner completed twice")
+	}
+	for _, title := range []string{"Structured record", "TABLE_NAME"} {
+		if strings.Count(ansi.Strip(output.String()), title) != 1 {
+			t.Fatalf("structured output %q was lost or duplicated", title)
+		}
 	}
 	normalized := strings.ReplaceAll(output.String(), "\r\n", "\n")
 	if count := strings.Count(normalized, strings.TrimSuffix(full, "\n")); count != 1 {

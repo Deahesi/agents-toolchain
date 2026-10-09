@@ -12,6 +12,7 @@ func defaultAgent(name string) *domain.AgentConfig {
 			Model:        "gpt-4o",
 			Temperature:  0.2,
 			SystemPrompt: "You are a helpful assistant. You answer clearly and to the point.\n",
+			WorkDir:      ".",
 			Memory: &domain.Memory{
 				Type: "local_file",
 				Path: "./.agent_history.json",

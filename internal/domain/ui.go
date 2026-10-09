@@ -5,6 +5,8 @@ import (
 )
 
 type UI interface {
+	PrintFields(title string, fields []Field)
+	PrintTable(headers []string, rows [][]string)
 	LogStep(messages ...any)
 	LogSuccess(messages ...any)
 	LogError(messages ...any)
@@ -14,6 +16,12 @@ type UI interface {
 	TextInputMultiline(message ...string) (string, error)
 	InteractiveSelect(message string, options ...string) (string, error)
 	Area(message ...any) (Area, error)
+}
+
+// Field is one labeled, preformatted value in a structured output block.
+type Field struct {
+	Label string
+	Value string
 }
 
 type Spinner interface {

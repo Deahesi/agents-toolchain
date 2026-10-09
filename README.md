@@ -1,87 +1,78 @@
 # Agents Toolchain (atc)
 
-## Overview
+> **Status: In development — not stable yet.**
+> You can create and run agents, but bugs are still possible. Commands and config formats may change between releases.
 
-A CLI for creating and running AI agents. Define an agent's task, model, and tools in YAML, then run it from the terminal. Agents can read project files, write documentation and tests, or review code.
+A CLI for creating and running AI agents. Describe an agent's task, model, and tools in YAML, then run it from your terminal. Use agents to work on documentation, write tests, or review a project.
+
+Supports OpenAI, Anthropic, OpenRouter, and Ollama through Genkit.
 
 ## Installation
 
-All release packages contain a ready-to-run Go binary. The command is always `atc`.
+Choose one of the options below. Release packages include a native binary for Windows, Linux, and macOS on x64 and ARM64. Go is only needed when building from source.
 
-### npm (Windows, Linux, macOS)
+### npm
 
-Requires Node.js 22 or later. Install globally:
+Requires Node.js 22 or later.
 
 [![npm](https://img.shields.io/npm/v/@deahesi/agents-toolchain)](https://www.npmjs.com/package/@deahesi/agents-toolchain)
+
 ```sh
 npm install -g @deahesi/agents-toolchain
 atc --help
-atc --version
 ```
 
-Or run it without a global installation:
+Or run without installing globally:
 
 ```sh
 npx @deahesi/agents-toolchain --help
-npx @deahesi/agents-toolchain init
 ```
 
-The npm package includes a launcher and installs the native binary for Windows, Linux, or macOS on x64 or ARM64. Go is not required. Installation also works with `--ignore-scripts`; keep optional dependencies enabled so npm can install the platform package. An unsupported platform or a missing platform package produces an error with installation guidance. The command is `atc` for both local and global installations.
+Keep optional dependencies enabled: npm uses them to install the binary for your platform. Installation also works with `--ignore-scripts`.
 
-Releases also publish the same seven npm packages to [GitHub Packages](https://github.com/Deahesi/agents-toolchain/packages). The default commands above use npmjs.com. GitHub Packages requires registry configuration and authentication even for public npm packages; see [release and registry setup](build/README.md).
+For installation through GitHub Packages, see [registry setup](build/README.md#npm-registries).
 
-### Homebrew (macOS, Linux)
+### pip
+
+Requires Python 3.10 or later. Install in a virtual environment and keep it activated when using `atc`.
+
+```sh
+python -m pip install agents-toolchain
+atc --help
+```
+
+You can also run `python -m agents_toolchain`. Wheels include the binary and support Windows, macOS 12+, and Linux with glibc or musl.
+
+### Homebrew
 
 ```sh
 brew install --cask Deahesi/tap/agents-toolchain
 atc --help
 ```
 
-The cask selects the x64 or ARM64 archive from GitHub Releases. It requires neither Go nor Node.js. Updates use `brew upgrade --cask agents-toolchain`.
+Update with `brew upgrade --cask agents-toolchain`.
 
-### pip (Windows, Linux, macOS)
+### GitHub Releases and Linux packages
 
-Requires Python 3.10 or later. Install in your Python virtual environment:
+Download an archive, `.deb`, or `.rpm` for your platform from [GitHub Releases](https://github.com/Deahesi/agents-toolchain/releases).
 
-```sh
-python -m pip install agents-toolchain
-atc --help
-python -m agents_toolchain --version
-```
-
-Platform wheels include the native binary; installation does not compile Go or download executables from GitHub. Wheels cover x64 and ARM64 on Windows, macOS 12+, and Linux with glibc or musl. There is no source distribution that would require a Go compiler. Keep your virtual environment activated to use its `atc` command.
-
-### Debian / Ubuntu and RPM distributions
-
-Download the package for your architecture from [GitHub Releases](https://github.com/Deahesi/agents-toolchain/releases). For example, for version `0.1.2` on x64:
-
-```sh
-# Debian / Ubuntu
-sudo apt install ./agents-toolchain_0.1.2_amd64.deb
-
-# Fedora / RHEL family
-sudo dnf install ./agents-toolchain-0.1.2-1.x86_64.rpm
-
-atc --help
-```
-
-ARM64 packages end in `_arm64.deb` and `.aarch64.rpm`. Packages install `/usr/bin/atc`, the README, and the MIT license. These are downloadable packages, not an APT or YUM repository.
+Extract an archive and add the directory containing `atc` to `PATH`. On Debian or Ubuntu, install the downloaded `.deb` with `sudo apt install ./<filename>.deb`; on Fedora, use `sudo dnf install ./<filename>.rpm`. Replace `<filename>` with the downloaded package name. Linux packages install the command at `/usr/bin/atc`.
 
 ### From source
 
-Alternatively, build from source with Go 1.26.5 or later:
+Requires Go 1.26.5 or later.
 
-```powershell
+```sh
 go install github.com/Deahesi/agents-toolchain/cmd/atc@latest
 ```
 
-Make sure the installation directory is in `PATH`. Go uses `GOBIN` if set, otherwise `GOPATH/bin` (usually `%USERPROFILE%\go\bin` on Windows). `go install` does not update `PATH`; after adding the directory, open a new terminal.
+Add `GOBIN` to `PATH`, or `GOPATH/bin` if `GOBIN` is unset. The usual location on Windows is `%USERPROFILE%\go\bin`. Open a new terminal after changing `PATH`.
 
-## Base usage
+## Quick start
 
-Run the following steps from the project directory you want the agent to work on.
+Run these commands from the project you want the agent to work on.
 
-1. Create a `.env` file with your provider's API key:
+1. Set your provider's credentials. For OpenAI, create a `.env` file:
 
    ```dotenv
    OPENAI_API_KEY=your-api-key
@@ -89,32 +80,76 @@ Run the following steps from the project directory you want the agent to work on
 
 2. Initialize the project and create an agent:
 
-   ```powershell
+   ```sh
    atc init
    atc add hello
    ```
 
-   Skip `init` if `agents-toolchain.yml` already exists. The `add` command asks for the agent's settings and saves them to `agents/hello/agent.yml`.
+   Skip `init` if `agents-toolchain.yml` already exists. `add` asks for the agent's settings and saves them to `agents/hello/agent.yml`. Choose a model available through your provider.
 
-3. Run the agent:
+3. Check the config and run the agent:
 
-   ```powershell
+   ```sh
+   atc check hello
    atc run hello --prompt "Hello!"
    ```
 
-Use `--prompt` or `-p` to provide a request. Without it, the agent follows the task in `system_prompt`.
+Use `--prompt` or `-p` to give the agent a request. Without it, the agent follows the task in `system_prompt`.
 
-Use `atc init --agents-dir <directory>` to choose where agent configs are stored. All commands accept `--workspace-dir <directory>` to choose the project containing `agents-toolchain.yml`. File tools and `.env` still use the current working directory, so launch the CLI from the project you want the agent to work on.
+## Commands
 
-## Config
+| Command | What it does |
+| --- | --- |
+| `atc init` | Creates `agents-toolchain.yml` and the agents directory. |
+| `atc add <name>` | Creates an agent through interactive prompts. |
+| `atc list` | Shows agents with their descriptions, providers, and models. |
+| `atc check <name>` | Checks an agent's YAML and config values without calling the model. |
+| `atc run <name> [-p "request"]` | Runs an agent and streams its response and tool activity. |
+| `atc get-value <name> <field>` | Shows a single config value in a table. |
+| `atc set-value <name> <field> <value>` | Updates a config field. |
 
-`agents-toolchain.yml` specifies the directory containing agents:
+Use `atc --help` or `atc <command> --help` for available flags. `atc --version` prints the CLI version. Command errors go to stderr and return exit code `1`. `list` reports unreadable configs and skips them.
+
+### Read and update settings
+
+Fields use YAML names separated by dots. List indices start at zero.
+
+```sh
+atc get-value hello agent.model
+atc get-value hello agent.temperature
+atc set-value hello agent.temperature 0.4
+atc set-value hello agent.reasoning true
+atc set-value hello agent.max_output_tokens null
+```
+
+For an agent with tools, use paths such as `agent.tools.0.name` to read or change a list item. `get-value` currently displays scalar values, such as strings, numbers, and booleans; it does not render whole lists or objects.
+
+`set-value` treats string fields as literal text and parses other values as YAML. Use `null` to clear an optional field. The full config must pass validation before it is saved. Unknown fields and invalid list indices are rejected, and `agent.name` must still match its directory.
+
+Updates keep existing comments. A replacement file is written before saving over the original; whether the final rename is atomic depends on the OS. Updates that traverse or replace anchored fields are rejected.
+
+### Choose project and working directories
+
+`atc init --agents-dir configs/agents` stores agents in a different directory inside the project.
+
+All commands accept `--workspace-dir <directory>` to select the project containing `agents-toolchain.yml`:
+
+```sh
+atc list --workspace-dir ./my-project
+atc run hello --workspace-dir ./my-project
+```
+
+`--workspace-dir` selects the config location. Relative `work_dir` values and the `.env` location still use the directory where you started the CLI. Set `work_dir` to the directory the agent should work in.
+
+## Configuration
+
+`agents-toolchain.yml` contains the path to the agents directory, relative to the project:
 
 ```yaml
 agents_dir: agents
 ```
 
-Each agent has a config at `agents/<name>/agent.yml`:
+Each agent has its own file at `agents/<name>/agent.yml`:
 
 ```yaml
 version: "1.0"
@@ -124,54 +159,112 @@ agent:
   provider: openai
   model: gpt-4o
   temperature: 0.2
+  work_dir: .
   system_prompt: |
     You are a helpful assistant. Answer clearly and to the point.
   tools: []
 ```
 
-- `name` must match the agent directory name.
-- `description` briefly describes the agent.
-- `provider` is `openai`, `anthropic`, `ollama`, or `openrouter`.
-- `model` is the model ID for that provider, without adding the provider prefix.
-- `temperature` ranges from `0` to `2`; lower values give more predictable responses.
-- `system_prompt` describes the agent's task and expected output.
-- `tools` lists the tools the agent can use. Leave it empty for text-only tasks.
+| Field | Meaning |
+| --- | --- |
+| `version` | Config version. Currently `"1.0"`. |
+| `name` | Agent name; must match its directory. Use 1–64 ASCII letters, digits, hyphens, or underscores, starting with a letter or digit. Windows device names such as `CON` are reserved. |
+| `description` | A short description shown by `atc list`. |
+| `provider` | `openai`, `anthropic`, `openrouter`, or `ollama`. |
+| `model` | The model ID used by the provider. For OpenRouter, keep its model namespace, such as `openai/gpt-4o`. |
+| `temperature` | A number from `0` to `2`. The runtime omits it for some reasoning models. |
+| `work_dir` | An existing directory used by file tools. Relative paths start from the CLI's current directory. |
+| `system_prompt` | The agent's instructions and task. |
+| `tools` | The tools the agent can call. Use `[]` for text-only tasks. |
+| `max_output_tokens` | Optional positive output token limit. |
+| `reasoning` | Optional `true` or `false`. Omit it to use the model's default. |
+| `think` | Older Ollama-only setting for reasoning. If both fields are set, they must agree. |
 
-Built-in tools use `type: builtin`. Available names are `list_files`, `search_files`, `read_file`, `write_file`, `edit_file`, `execute_command`, `get_environment`, and `get_datetime`.
+`max_output_tokens` and `reasoning` are converted to provider-specific settings. Model support varies, so a valid config can still be rejected by the provider. For Anthropic's manual thinking mode, an explicit output limit must be greater than 1024. Disabling reasoning for Ollama's `gpt-oss` models is rejected locally. `check` validates the config; provider-specific checks also happen when running the agent.
 
-The CLI automatically reads `.env` from the current working directory at startup. Existing environment variables take priority. The file is optional if the variables are already set; `--workspace-dir` does not change where `.env` is read.
+The config also accepts `memory`, and generated configs include a `local_file` memory entry. The runtime does not yet load or save conversation history.
+
+### Provider credentials
+
+The CLI reads `.env` from the current directory at startup. Existing environment variables take priority. You can skip `.env` if the variables are already set.
 
 | Provider | Environment variables |
 | --- | --- |
-| `openai` | `OPENAI_API_KEY`; optional `OPENAI_BASE_URL` |
-| `anthropic` | `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` |
-| `openrouter` | `OPENROUTER_API_KEY` |
-| `ollama` | Optional `OLLAMA_HOST`, defaults to `http://localhost:11434` |
+| `openai` | `OPENAI_API_KEY`; optional `OPENAI_BASE_URL`. |
+| `anthropic` | `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`. |
+| `openrouter` | `OPENROUTER_API_KEY`. |
+| `ollama` | Optional `OLLAMA_HOST`; defaults to `http://localhost:11434`. |
+
+For Ollama, start the server and make sure the configured model is installed.
+
+## Tools
+
+Add each tool under `agent.tools` with `type: builtin`:
+
+```yaml
+tools:
+  - type: builtin
+    name: list_files
+  - type: builtin
+    name: read_file
+```
+
+| Tool | What it does |
+| --- | --- |
+| `list_files` | Lists files and directories at one level. |
+| `search_files` | Finds names matching a pattern such as `*.go` at one level. |
+| `read_file` | Reads a file. |
+| `write_file` | Creates or overwrites a file. |
+| `edit_file` | Replaces text in an existing file. |
+| `execute_command` | Runs a shell command. |
+| `get_environment` | Returns the OS, architecture, and selected environment variables. |
+| `get_datetime` | Returns the current date and time. |
+
+Only built-in tools are currently registered. MCP and custom tool types are not implemented. Tool calls run without a confirmation prompt; `allow_without_confirm` does not currently change that behavior.
+
+### File access
+
+File tools use paths relative to `work_dir`. They reject absolute paths, `..` components, Windows alternate data streams, and links that lead outside that directory. Listing and searching do not recurse into subdirectories; the agent must explore them explicitly. Search patterns match entry names, not file contents.
+
+Config access is limited to the selected workspace and, for agent files, to that agent's own directory. Shared file operations live in `internal/files` and use `os.Root` for path resolution.
+
+These checks limit file tools. They do not sandbox shell commands or isolate hard links, mount points, or special files.
+
+### Shell commands
+
+`execute_command` takes one string containing the full command:
+
+```json
+{"command": "git diff --staged"}
+```
+
+It uses `sh` on Linux/macOS and `powershell.exe` on Windows. Quoting, pipes, and redirection follow that shell's syntax; Windows PowerShell does not support `&&`.
+
+Commands run from the directory where the CLI was started, with a 30-second timeout and the current user's permissions. `work_dir` does not change the shell's working directory or restrict its file access.
 
 ## Examples
 
-Save each config at the path shown. You can create the folder and file manually or use `atc add <name>` and replace the generated config. These examples use OpenAI; set `OPENAI_API_KEY` in `.env` and choose a model that supports tools.
+These examples use OpenAI. Set `OPENAI_API_KEY` and choose a model that supports tool calls. Create each folder and `agent.yml` manually, or use `atc add <name>` and replace its config.
 
-### Documentation from project files
+### Write documentation
 
-`agents/docs/agent.yml`:
+Save as `agents/docs/agent.yml`:
 
 ```yaml
 version: "1.0"
 agent:
   name: docs
-  description: Write documentation from local project files
+  description: Write documentation from project files
   provider: openai
   model: gpt-4o
   temperature: 0.2
+  work_dir: .
   system_prompt: |
-    Read the local project, starting from the current directory.
-    Explore relevant subdirectories and inspect source files, configs,
-    and existing documentation. Write or update README.md with a simple
-    overview, setup steps, configuration, and usage examples.
-    Describe only behavior supported by the files you read.
-    Keep the project's documentation language and style.
-    Change only documentation files. End with a brief list of changes.
+    Read the project files and existing documentation.
+    Explore relevant subdirectories before making changes.
+    Update README.md with an overview, setup steps, and usage examples.
+    Describe only what the code supports. Keep the documentation language.
+    Change only documentation files. Finish with a brief list of changes.
   tools:
     - type: builtin
       name: list_files
@@ -183,77 +276,53 @@ agent:
       name: edit_file
 ```
 
-```powershell
+```sh
 atc run docs
 ```
 
-### Automated tests from a local project
+### Write tests
 
-`agents/tests/agent.yml`:
+Copy the documentation config to `agents/tests/agent.yml`, change `name` to `tests`, and set a suitable description. Replace `system_prompt` with:
 
 ```yaml
-version: "1.0"
-agent:
-  name: tests
-  description: Write and run tests for the local project
-  provider: openai
-  model: gpt-4o
-  temperature: 0.2
-  system_prompt: |
-    Read the local project, starting from the current directory.
-    Explore relevant subdirectories, source files, existing tests,
-    and test configuration. Use the project's test framework and style.
-    Add meaningful tests for normal behavior, edge cases, and errors.
-    Change only test files. Run the relevant tests with execute_command.
-    End with a brief list of added tests and their results.
-    If tests could not be run, say so and explain why.
-  tools:
-    - type: builtin
-      name: list_files
-    - type: builtin
-      name: read_file
-    - type: builtin
-      name: write_file
-    - type: builtin
-      name: edit_file
-    - type: builtin
-      name: execute_command
+system_prompt: |
+  Read the source, existing tests, and test configuration.
+  Add tests for normal behavior, edge cases, and errors.
+  Follow the project's test framework and style. Change only test files.
+  Run the relevant tests. Report what you added and whether the tests passed.
+  If you could not run them, explain why.
 ```
 
-```powershell
+Add this entry to `agent.tools`, keeping the file tools:
+
+```yaml
+- type: builtin
+  name: execute_command
+```
+
+```sh
 atc run tests
 ```
 
-### Project review with structured findings
+### Review a project
 
-`agents/review/agent.yml`:
+Save as `agents/review/agent.yml`:
 
 ```yaml
 version: "1.0"
 agent:
   name: review
-  description: Review the local project and report problems
+  description: Review the project without changing files
   provider: openai
   model: gpt-4o
   temperature: 0.2
+  work_dir: .
   system_prompt: |
-    Review the local project, starting from the current directory.
-    Explore relevant subdirectories and read source files, configs,
-    and tests. Look for bugs, security issues, and incorrect behavior.
-    Report only problems supported by the files you read.
-    Do not modify files.
-    In your final response, report each problem as a separate block:
-    file: <relative file path>
-    row: <line number or range, starting at 1>
-    problem: <what is wrong and its impact>
-    Separate blocks with a blank line. Do not wrap them in Markdown fences.
-    If problems were found, the final line must be exactly:
-    Status: error
-    If no problems were found after completing the review, output only:
-    Status: success
-    If the review could not be completed, report the blocker using the
-    same block format, use row: N/A when needed, and end with Status: error.
-    Do not output anything after the status line.
+    Read the source, configs, and tests. Explore relevant subdirectories.
+    Look for bugs and security issues. Do not modify files.
+    For each finding, report the file, line number, problem, and impact.
+    Support each finding with evidence from the code.
+    If no problems are found, say so. If the review is incomplete, explain why.
   tools:
     - type: builtin
       name: list_files
@@ -261,22 +330,8 @@ agent:
       name: read_file
 ```
 
-```powershell
+```sh
 atc run review
 ```
 
-Example final response when a problem is found:
-
-```text
-file: src/config.go
-row: 42
-problem: An empty API key is accepted, causing requests to fail later.
-
-Status: error
-```
-
-With no problems:
-
-```text
-Status: success
-```
+You can ask for JSON or another response format in `system_prompt`, but the CLI does not enforce an output schema. A model's finding or a line such as `Status: error` does not determine the command's exit code.

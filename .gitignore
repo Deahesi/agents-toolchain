@@ -11,6 +11,4 @@ __pycache__/
 .env
 .env.*
 !.env.example
-/agents/
-agents-toolchain.yml
 /dist/

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/Deahesi/agents-toolchain/internal/tools/builtin/filesystem"
 	"github.com/Deahesi/agents-toolchain/internal/tools/builtin/system"
 	"github.com/firebase/genkit/go/ai"
@@ -12,19 +13,19 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-func DefineBuiltinTool(g *genkit.Genkit, tool *domain.ToolConfig) ai.ToolRef {
+func DefineBuiltinTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.Root) ai.ToolRef {
 	switch tool.Name {
 	//Filesystem
 	case "read_file":
-		return filesystem.DefineReadFileTool(g, tool)
+		return filesystem.DefineReadFileTool(g, tool, root)
 	case "write_file":
-		return filesystem.DefineWriteFileTool(g, tool)
+		return filesystem.DefineWriteFileTool(g, tool, root)
 	case "edit_file":
-		return filesystem.DefineEditFileTool(g, tool)
+		return filesystem.DefineEditFileTool(g, tool, root)
 	case "list_files":
-		return filesystem.DefineListFilesTool(g, tool)
+		return filesystem.DefineListFilesTool(g, tool, root)
 	case "search_files":
-		return filesystem.DefineSearchFilesTool(g, tool)
+		return filesystem.DefineSearchFilesTool(g, tool, root)
 	//System
 	case "execute_command":
 		return system.DefineExecuteCommandTool(g, tool)

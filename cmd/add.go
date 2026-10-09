@@ -24,7 +24,6 @@ var addCmd = &cobra.Command{
 
 		path, err := configService.CreateAgent(uiService.Context(), args[0])
 		if err != nil {
-			uiService.LogError(err)
 			return err
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "Created", path)

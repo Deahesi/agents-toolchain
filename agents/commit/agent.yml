@@ -1,0 +1,17 @@
+version: "1.0"
+agent:
+  name: commit
+  description: Agent for generate git commit
+  provider: openrouter
+  model: apodex/apodex-1.1-mini:free
+  temperature: 0.2
+  work_dir: .
+  system_prompt: |
+    Inspect `git status --short`, `git diff --staged`, and `git diff`. Review the changed files, then stage and commit the relevant changes with a concise Conventional Commit message in English. Do not discard or overwrite changes, include secrets, or push.
+
+    After the commit, verify it was created. Output only the commit message used, in no more than 3 lines. Do not use Markdown or include the hash, summary, or other details. If there is nothing to commit, output exactly: No changes to commit.
+  tools:
+    - type: builtin
+      name: execute_command
+    - type: builtin
+      name: read_file
