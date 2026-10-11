@@ -9,7 +9,7 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run <agent-name>",
-	Short: "Run an agent through Genkit and stream its response",
+	Short: "Run an agent and stream its response",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workspaceDir, err := cmd.Flags().GetString("workspace-dir")
@@ -23,15 +23,9 @@ var runCmd = &cobra.Command{
 
 		prompt, err := cmd.Flags().GetString("prompt")
 		if err != nil {
-			uiService.LogError(err.Error())
-			return nil
+			return err
 		}
-		err = agentService.Run(uiService.Context(), args[0], prompt, cmd.OutOrStdout())
-		if err != nil {
-			uiService.LogError(err.Error())
-			return nil
-		}
-		return nil
+		return agentService.Run(uiService.Context(), args[0], prompt, cmd.OutOrStdout())
 	},
 }
 

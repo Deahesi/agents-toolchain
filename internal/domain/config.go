@@ -8,6 +8,8 @@ import (
 
 const ConfigVersion = "1.0"
 
+const temperatureError = "agent.temperature must be a finite number between 0 and 2"
+
 type ProjectConfig struct {
 	AgentsDir string `yaml:"agents_dir"`
 }
@@ -35,27 +37,50 @@ func (c *AgentConfig) Validate() error {
 }
 
 type Agent struct {
-	Name         string       `yaml:"name"`
-	Description  string       `yaml:"description"`
-	Provider     string       `yaml:"provider"`
-	Model        string       `yaml:"model"`
-	Temperature  float64      `yaml:"temperature"`
+	Name        string  `yaml:"name"`
+	Description string  `yaml:"description"`
+	Provider    string  `yaml:"provider"`
+	Model       string  `yaml:"model"`
+	Temperature float64 `yaml:"temperature"`
+
+	MaxOutputTokens *int   `yaml:"max_output_tokens,omitempty"`
+	Reasoning       *bool  `yaml:"reasoning,omitempty"`
+	WorkDir         string `yaml:"work_dir"`
+
+	Think        *bool        `yaml:"think,omitempty"`
 	SystemPrompt string       `yaml:"system_prompt"`
 	Memory       *Memory      `yaml:"memory,omitempty"`
 	Tools        []ToolConfig `yaml:"tools"`
 }
 
 func ValidateProvider(p any) error {
-	return validation.Validate(p, requiredText("Provider is required"), validation.By(validateProvider))
+	providers := make([]string, len(Providers))
+	for i, provider := range Providers {
+		providers[i] = string(provider)
+	}
+	return validation.Validate(p,
+		requiredText("Provider is required"),
+		oneOf(fmt.Sprintf("unsupported agent.provider %q", p), providers...),
+	)
 }
 
 func ValidateModel(m any) error {
-	return validation.Validate(m, validation.By(validateModel))
+	return validation.Validate(m,
+		requiredText("agent.model is required"),
+		withoutWhitespace("agent.model must not contain whitespace"),
+	)
+}
+
+func ValidateWorkDir(d any) error {
+	return validation.Validate(d,
+		requiredText("Work dir is required"),
+		existingDirectory("Work dir must point to an existing directory"),
+	)
 }
 
 func ValidateTemperature(t any) error {
 	return validation.Validate(t,
-		validation.By(validateFiniteNumber),
+		finiteNumber(temperatureError),
 		validation.Min(0.0).Error(temperatureError),
 		validation.Max(2.0).Error(temperatureError),
 	)
@@ -66,6 +91,9 @@ func ValidateSystemPrompt(p any) error {
 }
 
 func (a *Agent) Validate() error {
+	if a.Think != nil && ProviderKey(a.Provider) != Ollama {
+		return fmt.Errorf("think is only supported for the ollama provider")
+	}
 	return validation.ValidateStruct(a,
 		validation.Field(&a.Name, validation.By(func(value any) error {
 			return ValidateAgentName(value.(string))
@@ -74,8 +102,12 @@ func (a *Agent) Validate() error {
 		validation.Field(&a.Model, validation.By(ValidateModel)),
 		validation.Field(&a.Temperature, validation.By(ValidateTemperature)),
 		validation.Field(&a.SystemPrompt, validation.By(ValidateSystemPrompt)),
+
+		validation.Field(&a.MaxOutputTokens, positiveInteger("agent.max_output_tokens must be a positive integer")),
+		validation.Field(&a.WorkDir, validation.By(ValidateWorkDir)),
+
 		validation.Field(&a.Memory),
-		validation.Field(&a.Tools, validation.By(validateUniqueToolNames)),
+		validation.Field(&a.Tools, uniqueBy("duplicate agent tool name", func(tool ToolConfig) string { return tool.Name })),
 	)
 }
 

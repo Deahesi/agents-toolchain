@@ -9,12 +9,15 @@ import (
 )
 
 var (
+	stepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 )
 
-func (s *UIService) LogStep(values ...any) { s.log(s.output, message(values...)) }
+func (s *UIService) LogStep(values ...any) {
+	s.log(s.output, stepStyle.Render("• "+message(values...)))
+}
 func (s *UIService) LogSuccess(values ...any) {
 	s.log(s.output, successStyle.Render("✓ "+message(values...)))
 }

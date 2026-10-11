@@ -30,8 +30,6 @@ var initCmd = &cobra.Command{
 
 		path, err := configService.Init(uiService.Context(), agentsDir)
 		if err != nil {
-			uiService.LogError(err)
-			cmd.SilenceErrors = true
 			return err
 		}
 

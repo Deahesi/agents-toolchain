@@ -1,9 +1,8 @@
 package filesystem
 
 import (
-	"os"
-
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
@@ -17,22 +16,13 @@ type WriteFileOutput struct {
 	Message string `json:"message,omitempty"`
 }
 
-func DefineWriteFileTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[WriteFileInput, WriteFileOutput] {
+func DefineWriteFileTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.Root) *ai.ToolAction[WriteFileInput, WriteFileOutput] {
 	return genkit.DefineTool(
 		g,
 		"write_file",
-		"Write file",
+		"Creates or overwrites a file relative to the configured work directory. Absolute paths, '..' and links outside that directory are forbidden.",
 		func(ctx *ai.ToolContext, input WriteFileInput) (WriteFileOutput, error) {
-			file, err := os.Create(input.Path)
-
-			if err != nil {
-				return WriteFileOutput{
-					Success: false,
-					Message: err.Error(),
-				}, nil
-			}
-
-			_, err = file.Write([]byte(input.Text))
+			err := root.WriteFile(input.Path, []byte(input.Text), 0o666)
 			if err != nil {
 				return WriteFileOutput{
 					Success: false,

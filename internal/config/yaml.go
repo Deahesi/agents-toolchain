@@ -15,22 +15,29 @@ type validatable interface {
 
 func decode[T validatable](content []byte) (T, error) {
 	var configuration T
-	decoder := yaml.NewDecoder(bytes.NewReader(content))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&configuration); err != nil {
-		return configuration, fmt.Errorf("decode config: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err != nil {
-			return configuration, fmt.Errorf("decode trailing YAML: %w", err)
-		}
-		return configuration, errors.New("config must contain exactly one YAML document")
+	if err := decodeDocument(content, &configuration); err != nil {
+		return configuration, err
 	}
 	if err := configuration.Validate(); err != nil {
 		return configuration, fmt.Errorf("invalid config: %w", err)
 	}
 	return configuration, nil
+}
+
+func decodeDocument(content []byte, target any) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(content))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("decode config: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return fmt.Errorf("decode trailing YAML: %w", err)
+		}
+		return errors.New("config must contain exactly one YAML document")
+	}
+	return nil
 }
 
 func encode(configuration validatable) ([]byte, error) {

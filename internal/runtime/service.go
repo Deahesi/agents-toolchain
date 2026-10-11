@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Deahesi/agents-toolchain/internal/agents"
 	"github.com/Deahesi/agents-toolchain/internal/config"
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
+	"github.com/Deahesi/agents-toolchain/internal/memory"
 	"github.com/Deahesi/agents-toolchain/internal/tools"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
@@ -34,11 +37,41 @@ func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.
 		return err
 	}
 
+	//CONFIG
 	configuration, err := s.configs.LoadAgent(ctx, name)
 	if err != nil {
 		return err
 	}
+	err = configuration.Validate()
+	if err != nil {
+		return err
+	}
 
+	//MEMORY
+	var store *memory.MemoryStore = nil
+	if configuration.Agent.Memory != nil {
+		project, err := s.configs.GetProjectConfig()
+		if err != nil {
+			return err
+		}
+		store, err = memory.OpenMemoryStore(
+			configuration.Agent.Memory,
+			filepath.Join(project.AgentsDir, configuration.Agent.Name),
+		)
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+	}
+
+	//AGENT WORK DIR
+	root, err := files.OpenRoot(configuration.Agent.WorkDir)
+	if err != nil {
+		return fmt.Errorf("open agent work directory: %w", err)
+	}
+	defer root.Close()
+
+	//PROVIDER
 	providerPlugin, err := agents.GetProviderPlugin(ctx, configuration.Agent.Provider)
 	if err != nil {
 		return err
@@ -48,21 +81,30 @@ func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.
 		ctx,
 		providerPlugin,
 	)
-	s.toolRegistration = tools.NewToolRegistration(s.runtime, configuration.Agent.Tools)
-	s.toolRegistration.Register()
+	s.toolRegistration = tools.NewToolRegistration(s.runtime, configuration.Agent.Tools, root)
+	err = s.toolRegistration.Register()
+
+	if err != nil {
+		return err
+	}
 
 	if strings.TrimSpace(input) == "" {
 		input = "Follow the task described in the system prompt."
 	}
 
-	if err := s.stream(ctx, configuration.Agent, input); err != nil {
+	if err := s.stream(ctx, configuration.Agent, store, input); err != nil {
 		return fmt.Errorf("run agent %q: %w", name, err)
 	}
 
 	return nil
 }
 
-func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input string) (err error) {
+func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, store *memory.MemoryStore, input string) (err error) {
+	config, err := agents.GetProviderConfig(ctx, &agent)
+	if err != nil {
+		return fmt.Errorf("configure provider %q: %w", agent.Provider, err)
+	}
+
 	var text strings.Builder
 
 	spinner, err := s.ui.LogSpinnerTimer(time.Second, "Generating response")
@@ -76,13 +118,22 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input s
 	}
 	defer area.Stop()
 
+	var messages []*ai.Message = nil
+	if store != nil {
+		messages, err = store.Load(ctx)
+		if err != nil {
+			return fmt.Errorf("load memory: %w", err)
+		}
+	}
+
 	var lastPart ai.PartKind
 	response, err := genkit.Generate(ctx, s.runtime,
 		ai.WithModelName(fmt.Sprintf("%s/%s", agent.Provider, agent.Model)),
-		ai.WithConfig(map[string]any{"temperature": agent.Temperature}),
+		ai.WithConfig(config),
 		ai.WithSystemParts(ai.NewTextPart(agent.SystemPrompt)),
 		ai.WithPromptParts(ai.NewTextPart(input)),
 		ai.WithTools(s.toolRegistration.Tools...),
+		ai.WithMessages(messages...),
 		ai.WithStreaming(func(_ context.Context, chunk *ai.ModelResponseChunk) error {
 			for _, part := range chunk.Content {
 				if lastPart != part.Kind {
@@ -121,6 +172,18 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, input s
 	}
 	if text.Len() > 0 && !strings.HasSuffix(text.String(), "\n") {
 		area.Update("\n")
+	}
+
+	if store != nil {
+		if err = store.Save(ctx, response.History()); err != nil {
+			spinner.Fail()
+			return fmt.Errorf("fail to save history: %w", err)
+		}
+	}
+
+	if strings.TrimSpace(text.String()) == "" {
+		spinner.Fail()
+		return fmt.Errorf("model returned no final text (only reasoning or an empty response)")
 	}
 
 	spinner.Success()

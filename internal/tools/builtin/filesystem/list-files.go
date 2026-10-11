@@ -1,9 +1,8 @@
 package filesystem
 
 import (
-	"os"
-
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
@@ -23,18 +22,18 @@ type ListFilesOutput struct {
 	Files   []FileItem `json:"files,omitempty"`
 }
 
-func DefineListFilesTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[ListFilesInput, ListFilesOutput] {
+func DefineListFilesTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.Root) *ai.ToolAction[ListFilesInput, ListFilesOutput] {
 	return genkit.DefineTool(
 		g,
 		"list_files",
-		"Lists files and folders inside the specified directory (non-recursive).",
+		"Lists files and folders non-recursively, relative to the configured work directory. Empty path means the work directory. Absolute paths, '..' and links outside that directory are forbidden.",
 		func(ctx *ai.ToolContext, input ListFilesInput) (ListFilesOutput, error) {
 			dirPath := input.Path
 			if dirPath == "" {
 				dirPath = "."
 			}
 
-			entries, err := os.ReadDir(dirPath)
+			entries, err := root.ReadDir(dirPath)
 			if err != nil {
 				return ListFilesOutput{
 					Success: false,

@@ -1,16 +1,15 @@
 package filesystem
 
 import (
-	"path/filepath"
-
 	"github.com/Deahesi/agents-toolchain/internal/domain"
+	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
 
 type SearchFilesInput struct {
-	Dir     string `json:"dir"`     // Папка для поиска (например, "." или "internal/domain")
-	Pattern string `json:"pattern"` // Маска поиска (например, "*.go", "main.*", "*user*")
+	Dir     string `json:"dir"`
+	Pattern string `json:"pattern"`
 }
 
 type SearchFilesOutput struct {
@@ -19,20 +18,18 @@ type SearchFilesOutput struct {
 	Matches []string `json:"matches,omitempty"`
 }
 
-func DefineSearchFilesTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAction[SearchFilesInput, SearchFilesOutput] {
+func DefineSearchFilesTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.Root) *ai.ToolAction[SearchFilesInput, SearchFilesOutput] {
 	return genkit.DefineTool(
 		g,
 		"search_files",
-		"Finds files in a specific directory using a glob pattern (e.g., '*.go' or '*config*'). Non-recursive.",
+		"Finds entries non-recursively, relative to the configured work directory. Empty dir means the work directory. Pattern matches names only (e.g., '*.go'), without directory separators. Absolute paths, '..' and links outside the work directory are forbidden.",
 		func(ctx *ai.ToolContext, input SearchFilesInput) (SearchFilesOutput, error) {
 			dirPath := input.Dir
 			if dirPath == "" {
 				dirPath = "."
 			}
 
-			fullPattern := filepath.Join(dirPath, input.Pattern)
-
-			matches, err := filepath.Glob(fullPattern)
+			matches, err := root.Search(dirPath, input.Pattern)
 			if err != nil {
 				return SearchFilesOutput{
 					Success: false,
@@ -40,14 +37,9 @@ func DefineSearchFilesTool(g *genkit.Genkit, tool *domain.ToolConfig) *ai.ToolAc
 				}, nil
 			}
 
-			var results []string
-			for _, match := range matches {
-				results = append(results, filepath.Clean(match))
-			}
-
 			return SearchFilesOutput{
 				Success: true,
-				Matches: results,
+				Matches: matches,
 			}, nil
 		},
 	)

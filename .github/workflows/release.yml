@@ -3,7 +3,7 @@ name: Packages and release
 on:
   pull_request:
   push:
-    branches: ['**']
+    branches: ['main']
     tags: ['v*']
 
 permissions:

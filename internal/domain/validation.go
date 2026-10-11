@@ -4,17 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/invopop/validation"
 )
 
-const temperatureError = "agent.temperature must be a finite number between 0 and 2"
-
 func requiredText(message string) validation.Rule {
 	return validation.By(func(value any) error {
-		if strings.TrimSpace(value.(string)) == "" {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return errors.New(message)
+		}
+		text, err := validation.EnsureString(value)
+		if err != nil || strings.TrimSpace(text) == "" {
 			return errors.New(message)
 		}
 		return nil
@@ -23,51 +27,115 @@ func requiredText(message string) validation.Rule {
 
 func localPath(message string) validation.Rule {
 	return validation.By(func(value any) error {
-		path := value.(string)
-		if strings.TrimSpace(path) == "" || !filepath.IsLocal(path) {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return errors.New(message)
+		}
+		path, err := validation.EnsureString(value)
+		if err != nil || strings.TrimSpace(path) == "" || !filepath.IsLocal(path) {
 			return errors.New(message)
 		}
 		return nil
 	})
 }
 
-func validateProvider(value any) error {
-	provider := value.(string)
-	for _, supported := range Providers {
-		if provider == string(supported) {
+func existingDirectory(message string) validation.Rule {
+	return validation.By(func(value any) error {
+		value, isNil := validation.Indirect(value)
+		if isNil {
 			return nil
 		}
-	}
-	return fmt.Errorf("unsupported agent.provider %q", provider)
-}
-
-func validateModel(value any) error {
-	model := value.(string)
-	if strings.TrimSpace(model) == "" {
-		return errors.New("agent.model is required")
-	}
-	if strings.ContainsAny(model, " \t\r\n") {
-		return errors.New("agent.model must not contain whitespace")
-	}
-	return nil
-}
-
-func validateFiniteNumber(value any) error {
-	number := value.(float64)
-	if math.IsNaN(number) || math.IsInf(number, 0) {
-		return errors.New(temperatureError)
-	}
-	return nil
-}
-
-func validateUniqueToolNames(value any) error {
-	tools := value.([]ToolConfig)
-	names := make(map[string]bool, len(tools))
-	for _, tool := range tools {
-		if names[tool.Name] {
-			return fmt.Errorf("duplicate agent tool name %q", tool.Name)
+		path, err := validation.EnsureString(value)
+		if err != nil {
+			return errors.New(message)
 		}
-		names[tool.Name] = true
+		info, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", message, err)
+		}
+		if !info.IsDir() {
+			return errors.New(message)
+		}
+		return nil
+	})
+}
+
+func oneOf[T any](message string, values ...T) validation.Rule {
+	allowed := make([]any, len(values))
+	for i, value := range values {
+		allowed[i] = value
 	}
-	return nil
+	return validation.In(allowed...).Error(message)
+}
+
+func withoutWhitespace(message string) validation.Rule {
+	return validation.By(func(value any) error {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return nil
+		}
+		text, err := validation.EnsureString(value)
+		if err != nil || strings.ContainsAny(text, " \t\r\n") {
+			return errors.New(message)
+		}
+		return nil
+	})
+}
+
+func finiteNumber(message string) validation.Rule {
+	return validation.By(func(value any) error {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return nil
+		}
+		if _, err := validation.ToInt(value); err == nil {
+			return nil
+		}
+		if _, err := validation.ToUint(value); err == nil {
+			return nil
+		}
+		number, err := validation.ToFloat(value)
+		if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
+			return errors.New(message)
+		}
+		return nil
+	})
+}
+
+func positiveInteger(message string) validation.Rule {
+	return validation.By(func(value any) error {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return nil
+		}
+		if number, err := validation.ToInt(value); err == nil && number > 0 {
+			return nil
+		}
+		if number, err := validation.ToUint(value); err == nil && number > 0 {
+			return nil
+		}
+		return errors.New(message)
+	})
+}
+
+func uniqueBy[T any, K comparable](message string, key func(T) K) validation.Rule {
+	return validation.By(func(value any) error {
+		value, isNil := validation.Indirect(value)
+		if isNil {
+			return nil
+		}
+		items, ok := value.([]T)
+		if !ok {
+			return errors.New(message)
+		}
+		seen := make(map[K]bool, len(items))
+		for _, item := range items {
+			itemKey := key(item)
+			if seen[itemKey] {
+				return fmt.Errorf("%s: %v", message, itemKey)
+			}
+			seen[itemKey] = true
+		}
+		return nil
+	})
 }
