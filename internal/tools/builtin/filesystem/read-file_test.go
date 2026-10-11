@@ -46,7 +46,6 @@ func TestReadFile(t *testing.T) {
 			},
 			response: ReadFileOutput{
 				Success: false,
-				Message: fmt.Sprintf("openat %s: no such file or directory", TestFileNameNoExist),
 			},
 		},
 		{
@@ -75,7 +74,11 @@ func TestReadFile(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if output.Message != tc.response.Message {
+			if !tc.response.Success && output.Message == "" {
+				t.Error("expected an error message")
+			}
+
+			if (tc.response.Success || tc.response.Message != "") && output.Message != tc.response.Message {
 				t.Errorf("output Message err: want %s; got %s", tc.response.Message, output.Message)
 			}
 

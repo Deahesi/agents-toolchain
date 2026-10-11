@@ -72,6 +72,7 @@ func (s *ConfigService) GetProjectConfig() (*domain.ProjectConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open workspace dir: %w", err)
 	}
+	defer root.Close()
 
 	content, err := root.ReadFile(ProjectFile)
 	if err != nil {

@@ -30,10 +30,10 @@ func TestDefineBuiltinTool(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root, err := files.OpenRoot(t.TempDir())
-
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer root.Close()
 
 			ctx := context.Background()
 			g := genkit.Init(ctx)

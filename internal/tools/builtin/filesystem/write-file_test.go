@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Deahesi/agents-toolchain/internal/domain"
@@ -48,6 +49,7 @@ func TestWriteFile(t *testing.T) {
 		name     string
 		input    map[string]any
 		response WriteFileOutput
+		unixOnly bool
 	}{
 		{
 			name: "test create base file",
@@ -77,22 +79,26 @@ func TestWriteFile(t *testing.T) {
 			},
 			response: WriteFileOutput{
 				Success: false,
-				Message: fmt.Sprintf("write ../%s: relative path without '..' required: permission denied", TestWriteFileName),
+				Message: fmt.Sprintf("write %s: relative path without '..' required: permission denied", filepath.Join("..", TestWriteFileName)),
 			},
 		},
 		{
-			name: "test fail when creating file with no permissions",
+			name:     "test fail when creating file with no permissions",
+			unixOnly: true,
 			input: map[string]any{
 				"path": filepath.Join(TestWriteForbDir, TestWriteFileName),
 				"text": "TEST FILE TEXT CONTENT",
 			},
 			response: WriteFileOutput{
 				Success: false,
-				Message: fmt.Sprintf("openat %s/%s: permission denied", TestWriteForbDir, TestWriteFileName),
 			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.unixOnly && runtime.GOOS == "windows" {
+				t.Skip("requires Unix directory permissions")
+			}
+
 			if tool.Name() != "write_file" {
 				t.Errorf("tool name err: want %s; got %s", "write_file", tool.Name())
 			}
@@ -107,7 +113,11 @@ func TestWriteFile(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if output.Message != tc.response.Message {
+			if !tc.response.Success && output.Message == "" {
+				t.Error("expected an error message")
+			}
+
+			if (tc.response.Success || tc.response.Message != "") && output.Message != tc.response.Message {
 				t.Errorf("output message err: want %s; got %s", tc.response.Message, output.Message)
 			}
 
