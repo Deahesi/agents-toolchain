@@ -1,4 +1,5 @@
 # Agents Toolchain (atc)
+![demo](https://github-production-user-asset-6210df.s3.amazonaws.com/69626342/670720490-59b9f284-4b4c-4add-9198-6409162a060c.gif?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20261011%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261011T100630Z&X-Amz-Expires=300&X-Amz-Signature=e062cbf7c4c44adf55082cfe7359daf97cb1e83360fbc83a13a9eae60837cac3&X-Amz-SignedHeaders=host&response-content-type=image%2Fgif)
 
 > **Status: In development — not stable yet.**
 > You can create and run agents, but bugs are still possible. Commands and config formats may change between releases.
@@ -162,6 +163,9 @@ agent:
   work_dir: .
   system_prompt: |
     You are a helpful assistant. Answer clearly and to the point.
+  memory:
+    type: local_file
+    path: ./.agent_history.json
   tools: []
 ```
 
@@ -176,13 +180,18 @@ agent:
 | `work_dir` | An existing directory used by file tools. Relative paths start from the CLI's current directory. |
 | `system_prompt` | The agent's instructions and task. |
 | `tools` | The tools the agent can call. Use `[]` for text-only tasks. |
+| `memory` | Optional conversation history storage. Currently supports `type: local_file` with a relative `path` inside the agent directory. |
 | `max_output_tokens` | Optional positive output token limit. |
 | `reasoning` | Optional `true` or `false`. Omit it to use the model's default. |
 | `think` | Older Ollama-only setting for reasoning. If both fields are set, they must agree. |
 
 `max_output_tokens` and `reasoning` are converted to provider-specific settings. Model support varies, so a valid config can still be rejected by the provider. For Anthropic's manual thinking mode, an explicit output limit must be greater than 1024. Disabling reasoning for Ollama's `gpt-oss` models is rejected locally. `check` validates the config; provider-specific checks also happen when running the agent.
 
-The config also accepts `memory`, and generated configs include a `local_file` memory entry. The runtime does not yet load or save conversation history.
+### Conversation memory
+
+When `memory` is configured, each run loads the previous conversation and saves the updated history as JSON after generation completes. Generated configs enable `local_file` memory at `./.agent_history.json`. The path is relative to the agent directory: for `hello`, the default file is `agents/hello/.agent_history.json`.
+
+The memory store creates missing parent directories and writes a `.gitignore` entry for the history file. Delete the history file to start a new conversation. Omit `memory` or set it to `null` to run without loading or saving history.
 
 ### Provider credentials
 
@@ -220,7 +229,7 @@ tools:
 | `get_environment` | Returns the OS, architecture, and selected environment variables. |
 | `get_datetime` | Returns the current date and time. |
 
-Only built-in tools are currently registered. MCP and custom tool types are not implemented. Tool calls run without a confirmation prompt; `allow_without_confirm` does not currently change that behavior.
+Only built-in tools are currently registered. MCP and custom tool types are not implemented. Unsupported tool types or unknown built-in names cause an error before model generation starts. Tool calls run without a confirmation prompt; `allow_without_confirm` does not currently change that behavior.
 
 ### File access
 

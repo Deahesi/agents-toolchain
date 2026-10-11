@@ -29,7 +29,7 @@ func DefineEditFileTool(g *genkit.Genkit, tool *domain.ToolConfig, root *files.R
 				return EditFileOutput{Success: false, Message: err.Error()}, nil
 			}
 
-			return EditFileOutput{Success: true, Message: "File successfully updated"}, nil
+			return EditFileOutput{Success: true}, nil
 		},
 	)
 }

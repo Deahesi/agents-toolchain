@@ -55,10 +55,23 @@ func TestStreamFinalAnswerAndThinkingConfig(t *testing.T) {
 				return &ai.ModelResponse{FinishReason: "stop", Message: &ai.Message{Role: ai.RoleModel, Content: parts}}, nil
 			})
 			var output bytes.Buffer
-			service := NewRuntimeService(ui.NewUIService(ui.WithOutput(&output), ui.WithErrorOutput(&output)), nil)
+
+			service := NewRuntimeService(
+				ui.NewUIService(
+					ui.WithOutput(&output),
+					ui.WithErrorOutput(&output),
+				),
+				nil,
+			)
 			service.runtime = g
 			service.toolRegistration = &tools.ToolRegistration{}
-			err := service.stream(ctx, domain.Agent{Provider: "ollama", Model: "test", Think: tc.think}, "Inspect repository")
+
+			err := service.stream(
+				ctx,
+				domain.Agent{Provider: "ollama", Model: "test", Think: tc.think},
+				nil,
+				"Inspect repository",
+			)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("stream error = %v, wantErr %v", err, tc.wantErr)
 			}

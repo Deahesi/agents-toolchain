@@ -66,3 +66,23 @@ func (s *ConfigService) Init(ctx context.Context, agentsDir string) (string, err
 
 	return ProjectFile, nil
 }
+
+func (s *ConfigService) GetProjectConfig() (*domain.ProjectConfig, error) {
+	root, err := files.OpenRoot(s.workspaceDir)
+	if err != nil {
+		return nil, fmt.Errorf("open workspace dir: %w", err)
+	}
+
+	content, err := root.ReadFile(ProjectFile)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, ErrNotInitialized
+		}
+		return nil, fmt.Errorf("read project config: %w", err)
+	}
+	configuration, err := decode[*domain.ProjectConfig](content)
+	if err != nil {
+		return nil, fmt.Errorf("load %s: %w", ProjectFile, err)
+	}
+	return configuration, nil
+}

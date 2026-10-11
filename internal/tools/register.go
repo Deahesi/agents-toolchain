@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"fmt"
+
 	"github.com/Deahesi/agents-toolchain/internal/domain"
 	"github.com/Deahesi/agents-toolchain/internal/files"
 	"github.com/Deahesi/agents-toolchain/internal/tools/builtin"
@@ -15,8 +17,6 @@ type ToolRegistration struct {
 	root        *files.Root
 }
 
-// NewToolRegistration binds filesystem tools to root for their entire lifetime.
-// The caller owns root and must keep it open until all tool calls finish.
 func NewToolRegistration(g *genkit.Genkit, configTools []domain.ToolConfig, root *files.Root) *ToolRegistration {
 	tools := make([]ai.ToolRef, 0, len(configTools))
 
@@ -28,17 +28,24 @@ func NewToolRegistration(g *genkit.Genkit, configTools []domain.ToolConfig, root
 	}
 }
 
-func (r *ToolRegistration) Register() {
+func (r *ToolRegistration) Register() error {
 	for _, tool := range r.configTools {
-		r.Tools = append(r.Tools, r.defineTool(&tool))
+		tool, err := r.defineTool(&tool)
+		if err != nil {
+			return err
+		}
+
+		r.Tools = append(r.Tools, tool)
 	}
+
+	return nil
 }
 
-func (r *ToolRegistration) defineTool(tool *domain.ToolConfig) ai.ToolRef {
+func (r *ToolRegistration) defineTool(tool *domain.ToolConfig) (ai.ToolRef, error) {
 	switch tool.Type {
 	case domain.ToolTypeBuiltin:
 		return builtin.DefineBuiltinTool(r.g, tool, r.root)
 	default:
-		return nil
+		return nil, fmt.Errorf("unexpected tool type: %s", tool.Type)
 	}
 }

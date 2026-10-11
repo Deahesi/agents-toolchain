@@ -31,7 +31,7 @@ func (s *ConfigService) CreateAgent(ctx context.Context, name string) (string, e
 	}
 	defer root.Close()
 
-	project, err := readProjectConfig(root)
+	project, err := s.GetProjectConfig()
 	if err != nil {
 		spinner.Fail()
 		return "", err
@@ -140,7 +140,7 @@ func (s *ConfigService) openAgentDir(ctx context.Context, name string) (*files.R
 		return nil, fmt.Errorf("open project: %w", err)
 	}
 	defer root.Close()
-	project, err := readProjectConfig(root)
+	project, err := s.GetProjectConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (s *ConfigService) GetAllAgents(ctx context.Context) ([]domain.AgentConfig,
 		return nil, fmt.Errorf("open project: %w", err)
 	}
 	defer root.Close()
-	project, err := readProjectConfig(root)
+	project, err := s.GetProjectConfig()
 	if err != nil {
 		return nil, err
 	}
