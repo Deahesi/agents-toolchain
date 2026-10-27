@@ -47,7 +47,6 @@ type Agent struct {
 	Reasoning       *bool  `yaml:"reasoning,omitempty"`
 	WorkDir         string `yaml:"work_dir"`
 
-	Think        *bool        `yaml:"think,omitempty"`
 	SystemPrompt string       `yaml:"system_prompt"`
 	Memory       *Memory      `yaml:"memory,omitempty"`
 	Tools        []ToolConfig `yaml:"tools"`
@@ -91,9 +90,9 @@ func ValidateSystemPrompt(p any) error {
 }
 
 func (a *Agent) Validate() error {
-	if a.Think != nil && ProviderKey(a.Provider) != Ollama {
-		return fmt.Errorf("think is only supported for the ollama provider")
-	}
+	// if a.Think != nil && ProviderKey(a.Provider) != Ollama {
+	// 	return fmt.Errorf("think is only supported for the ollama provider")
+	// }
 	return validation.ValidateStruct(a,
 		validation.Field(&a.Name, validation.By(func(value any) error {
 			return ValidateAgentName(value.(string))

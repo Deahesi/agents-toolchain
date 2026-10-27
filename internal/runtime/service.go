@@ -3,8 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"io"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/Deahesi/agents-toolchain/internal/config"
 	"github.com/Deahesi/agents-toolchain/internal/domain"
 	"github.com/Deahesi/agents-toolchain/internal/files"
-	"github.com/Deahesi/agents-toolchain/internal/memory"
 	"github.com/Deahesi/agents-toolchain/internal/tools"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
@@ -25,6 +22,12 @@ type RuntimeService struct {
 	toolRegistration *tools.ToolRegistration
 }
 
+type MemoryStore interface {
+	Close() error
+	Load(ctx context.Context) ([]*ai.Message, error)
+	Save(ctx context.Context, messages []*ai.Message) error
+}
+
 func NewRuntimeService(ui domain.UI, configs *config.ConfigService) *RuntimeService {
 	return &RuntimeService{
 		ui:      ui,
@@ -32,97 +35,85 @@ func NewRuntimeService(ui domain.UI, configs *config.ConfigService) *RuntimeServ
 	}
 }
 
-func (s *RuntimeService) Run(ctx context.Context, name, input string, output io.Writer) error {
+func (s *RuntimeService) Run(
+	ctx context.Context,
+	input string,
+	config *domain.AgentConfig,
+	memory MemoryStore,
+	cb func(ctx context.Context, chunk *ai.ModelResponseChunk) error,
+) (*ai.ModelResponse, error) {
 	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	//CONFIG
-	configuration, err := s.configs.LoadAgent(ctx, name)
-	if err != nil {
-		return err
-	}
-	err = configuration.Validate()
-	if err != nil {
-		return err
-	}
-
-	//MEMORY
-	var store *memory.MemoryStore = nil
-	if configuration.Agent.Memory != nil {
-		project, err := s.configs.GetProjectConfig()
-		if err != nil {
-			return err
-		}
-		store, err = memory.OpenMemoryStore(
-			configuration.Agent.Memory,
-			filepath.Join(project.AgentsDir, configuration.Agent.Name),
-		)
-		if err != nil {
-			return err
-		}
-		defer store.Close()
+		return nil, err
 	}
 
 	//AGENT WORK DIR
-	root, err := files.OpenRoot(configuration.Agent.WorkDir)
+	root, err := files.OpenRoot(config.Agent.WorkDir)
 	if err != nil {
-		return fmt.Errorf("open agent work directory: %w", err)
+		return nil, fmt.Errorf("open agent work directory: %w", err)
 	}
 	defer root.Close()
 
 	//PROVIDER
-	providerPlugin, err := agents.GetProviderPlugin(ctx, configuration.Agent.Provider)
+	providerPlugin, err := agents.GetProviderPlugin(ctx, config.Agent.Provider)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.runtime = genkit.Init(
 		ctx,
 		providerPlugin,
 	)
-	s.toolRegistration = tools.NewToolRegistration(s.runtime, configuration.Agent.Tools, root)
+	s.toolRegistration = tools.NewToolRegistration(s.runtime, config.Agent.Tools, root)
 	err = s.toolRegistration.Register()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if strings.TrimSpace(input) == "" {
 		input = "Follow the task described in the system prompt."
 	}
 
-	if err := s.stream(ctx, configuration.Agent, store, input); err != nil {
-		return fmt.Errorf("run agent %q: %w", name, err)
+	response, err := s.stream(ctx, config.Agent, memory, input, cb)
+
+	if err != nil {
+		return nil, fmt.Errorf("run agent %q: %w", config.Agent.Name, err)
 	}
 
-	return nil
+	return response, nil
 }
 
-func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, store *memory.MemoryStore, input string) (err error) {
+func (s *RuntimeService) stream(
+	ctx context.Context,
+	agent domain.Agent,
+	store MemoryStore,
+	input string,
+	cb func(ctx context.Context, chunk *ai.ModelResponseChunk) error,
+) (*ai.ModelResponse, error) {
 	config, err := agents.GetProviderConfig(ctx, &agent)
 	if err != nil {
-		return fmt.Errorf("configure provider %q: %w", agent.Provider, err)
+		return nil, fmt.Errorf("configure provider %q: %w", agent.Provider, err)
 	}
 
 	var text strings.Builder
 
 	spinner, err := s.ui.LogSpinnerTimer(time.Second, "Generating response")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	area, err := s.ui.Area("Output")
 	if err != nil {
 		spinner.Fail("Failed to start output")
-		return err
+		return nil, err
 	}
 	defer area.Stop()
 
 	var messages []*ai.Message = nil
+
 	if store != nil {
 		messages, err = store.Load(ctx)
 		if err != nil {
-			return fmt.Errorf("load memory: %w", err)
+			return nil, fmt.Errorf("load memory: %w", err)
 		}
 	}
 
@@ -134,7 +125,11 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, store *
 		ai.WithPromptParts(ai.NewTextPart(input)),
 		ai.WithTools(s.toolRegistration.Tools...),
 		ai.WithMessages(messages...),
-		ai.WithStreaming(func(_ context.Context, chunk *ai.ModelResponseChunk) error {
+		ai.WithStreaming(func(ctx context.Context, chunk *ai.ModelResponseChunk) error {
+			if cb != nil {
+				cb(ctx, chunk)
+			}
+
 			for _, part := range chunk.Content {
 				if lastPart != part.Kind {
 					area.Update("\n")
@@ -164,7 +159,7 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, store *
 
 	if err != nil {
 		spinner.Fail()
-		return err
+		return nil, err
 	}
 	if text.Len() == 0 {
 		text.WriteString(response.Text())
@@ -177,15 +172,15 @@ func (s *RuntimeService) stream(ctx context.Context, agent domain.Agent, store *
 	if store != nil {
 		if err = store.Save(ctx, response.History()); err != nil {
 			spinner.Fail()
-			return fmt.Errorf("fail to save history: %w", err)
+			return nil, fmt.Errorf("fail to save history: %w", err)
 		}
 	}
 
 	if strings.TrimSpace(text.String()) == "" {
 		spinner.Fail()
-		return fmt.Errorf("model returned no final text (only reasoning or an empty response)")
+		return nil, fmt.Errorf("model returned no final text (only reasoning or an empty response)")
 	}
 
 	spinner.Success()
-	return nil
+	return response, nil
 }
