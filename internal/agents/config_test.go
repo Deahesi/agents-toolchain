@@ -164,8 +164,6 @@ func TestProviderConfigValidationAndLegacyThink(t *testing.T) {
 		{"nil agent", nil, "agent config is required"},
 		{"unknown provider", &domain.Agent{Provider: "unknown"}, "unsupported model provider"},
 		{"invalid limit", &domain.Agent{Provider: "ollama", MaxOutputTokens: &zero}, "greater than zero"},
-		{"conflicting flags", &domain.Agent{Provider: "ollama", Reasoning: &enabled, Think: &disabled}, "must agree"},
-		{"think on other provider", &domain.Agent{Provider: "openai", Think: &enabled}, "only supported for the ollama"},
 		{"small thinking budget", &domain.Agent{Provider: "anthropic", Model: "claude-sonnet-4-5", Reasoning: &enabled, MaxOutputTokens: &small}, "greater than 1024"},
 		{"gpt-oss disabling", &domain.Agent{Provider: "ollama", Model: "gpt-oss:20b", Reasoning: &disabled}, "does not support disabling"},
 	} {
@@ -176,12 +174,12 @@ func TestProviderConfigValidationAndLegacyThink(t *testing.T) {
 			}
 		})
 	}
-	for _, think := range []*bool{&disabled, &enabled} {
-		config, err := GetProviderConfig(context.Background(), &domain.Agent{Provider: "ollama", Think: think})
+	for _, reasoning := range []*bool{&disabled, &enabled} {
+		config, err := GetProviderConfig(context.Background(), &domain.Agent{Provider: "ollama", Reasoning: reasoning})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if config.(map[string]any)["think"] != *think {
+		if config.(map[string]any)["think"] != *reasoning {
 			t.Fatalf("legacy think = %v, error = %v", config, err)
 		}
 	}

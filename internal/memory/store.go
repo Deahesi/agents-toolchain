@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 
 	"github.com/Deahesi/agents-toolchain/internal/domain"
@@ -16,12 +15,12 @@ type MemoryStore struct {
 	root   *files.Root
 }
 
-func OpenMemoryStore(config *domain.Memory, agentDir string) (*MemoryStore, error) {
+func OpenMemoryStore(config *domain.Memory, memoryPath string) (*MemoryStore, error) {
 	if config == nil {
-		return nil, fmt.Errorf("memory store not configured")
+		return nil, nil
 	}
 
-	root, err := files.OpenRoot(agentDir)
+	root, err := files.OpenRoot(memoryPath)
 	if err != nil {
 		return nil, err
 	}

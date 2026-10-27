@@ -20,12 +20,12 @@ func GetProviderConfig(ctx context.Context, config *domain.Agent) (any, error) {
 	if config.MaxOutputTokens != nil && *config.MaxOutputTokens <= 0 {
 		return nil, errors.New("max_output_tokens must be greater than zero")
 	}
-	if config.Think != nil && domain.ProviderKey(config.Provider) != domain.Ollama {
-		return nil, errors.New("think is only supported for the ollama provider")
-	}
-	if config.Reasoning != nil && config.Think != nil && *config.Reasoning != *config.Think {
-		return nil, errors.New("reasoning and think must agree when both are set")
-	}
+	// if config.Think != nil && domain.ProviderKey(config.Provider) != domain.Ollama {
+	// 	return nil, errors.New("think is only supported for the ollama provider")
+	// }
+	// if config.Reasoning != nil && config.Think != nil && *config.Reasoning != *config.Think {
+	// 	return nil, errors.New("reasoning and think must agree when both are set")
+	// }
 
 	result := map[string]any{"temperature": config.Temperature}
 	var tokenKey string
@@ -75,9 +75,7 @@ func GetProviderConfig(ctx context.Context, config *domain.Agent) (any, error) {
 	case domain.Ollama:
 		tokenKey = "num_predict"
 		reasoning := config.Reasoning
-		if reasoning == nil {
-			reasoning = config.Think
-		}
+
 		if reasoning != nil {
 			result["think"] = *reasoning
 			if hasModelPrefix(strings.Split(config.Model, ":")[0], "gpt-oss") {

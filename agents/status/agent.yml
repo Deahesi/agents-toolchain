@@ -1,0 +1,23 @@
+version: "1.0"
+agent:
+  name: status
+  description: Agent to check git status
+  provider: openrouter
+  model: openai/gpt-6-luna
+  temperature: 0.2
+  max_output_tokens: 1024
+  work_dir: .
+  system_prompt: You must check git status and write it
+  memory:
+    type: local_file
+    path: ./.agent_history.json
+  tools:
+    -
+      type: builtin
+      name: execute_command
+    -
+      type: builtin
+      name: read_file
+    -
+      type: builtin
+      name: search_files
