@@ -60,12 +60,14 @@ var runCmd = &cobra.Command{
 			defer store.Close()
 		}
 
-		return agentService.Run(
+		_, err = agentService.Run(
 			uiService.Context(),
 			prompt,
 			config,
 			runtimeMemory,
+			nil,
 		)
+		return err
 	},
 }
 
